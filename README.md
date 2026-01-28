@@ -1,4 +1,4 @@
-# DGX Spark WebUI
+# Sparky - DGX Spark WebUI
 
 A modern web-based dashboard for managing your NVIDIA DGX Spark system. Monitor system resources in real-time with `nvidia-smi`, deploy AI workloads with one click, and manage configurations.
 

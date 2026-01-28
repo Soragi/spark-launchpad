@@ -1,18 +1,17 @@
 import { NavLink } from "react-router-dom";
-import { ExternalLink, Cpu, Container } from "lucide-react";
+import { ExternalLink, Container } from "lucide-react";
+import sparkyLogo from "@/assets/sparky-logo.png";
 
 const Header = () => {
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between px-4 md:px-8">
-        <div className="flex items-center gap-3">
+        <NavLink to="/" className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <Cpu className="h-8 w-8 text-primary" />
-            <span className="text-xl font-bold">
-              <span className="text-primary">DGX</span> Spark
-            </span>
+            <img src={sparkyLogo} alt="Sparky" className="h-10 w-10" />
+            <span className="text-xl font-bold text-primary">Sparky</span>
           </div>
-        </div>
+        </NavLink>
 
         <nav className="flex items-center gap-1 md:gap-2">
           <NavLink
