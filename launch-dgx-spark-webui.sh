@@ -3,22 +3,22 @@
 set -euo pipefail
 
 # =============================================================================
-# Sparky - DGX Spark WebUI Launcher
+# DGX Spark WebUI Launcher
 # =============================================================================
-# A custom script for launching Sparky from the DGX Spark custom scripts 
-# launcher. This script handles Docker container management, repository 
-# updates, and provides real-time feedback.
+# A custom script for launching the DGX Spark WebUI from the DGX Spark
+# custom scripts launcher. This script handles Docker container management,
+# repository updates, and provides real-time feedback.
 # =============================================================================
 
 # --- Configuration ---
 PORT="${PORT:-8080}"
-REPO_URL="${REPO_URL:-https://github.com/YOUR_USERNAME/sparky.git}"
-INSTALL_DIR="${INSTALL_DIR:-${HOME}/.sparky}"
+REPO_URL="${REPO_URL:-https://github.com/YOUR_USERNAME/dgx-spark-webui.git}"
+INSTALL_DIR="${INSTALL_DIR:-${HOME}/.dgx-spark-webui}"
 
 # --- Cleanup handler ---
 cleanup() {
   echo ""
-  echo "Stopping Sparky..."
+  echo "Stopping DGX Spark WebUI..."
   cd "${INSTALL_DIR}" 2>/dev/null && docker compose down 2>/dev/null || true
   echo "Cleanup complete."
   exit 0
@@ -28,7 +28,7 @@ trap cleanup INT TERM HUP QUIT
 
 # --- Header ---
 echo "============================================================"
-echo "  Sparky - DGX Spark WebUI Launcher"
+echo "  DGX Spark WebUI Launcher"
 echo "============================================================"
 echo "Port: ${PORT}"
 echo "Install directory: ${INSTALL_DIR}"
@@ -102,7 +102,7 @@ echo "✓ Build complete"
 # --- Start containers ---
 echo ""
 echo "============================================================"
-echo "  Starting Sparky"
+echo "  Starting DGX Spark WebUI"
 echo "============================================================"
 echo ""
 echo "  Frontend URL: http://localhost:${PORT}"
