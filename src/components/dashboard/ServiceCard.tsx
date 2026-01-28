@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Play, Square, ExternalLink, FolderOpen, ChevronDown, Copy } from "lucide-react";
+import { Play, Square, ExternalLink, FolderOpen, ChevronDown, Copy, Loader2 } from "lucide-react";
 
 interface ServiceCardProps {
   name: string;
@@ -13,6 +13,7 @@ interface ServiceCardProps {
   onStart?: () => void;
   onStop?: () => void;
   onOpenInBrowser?: () => void;
+  isLoading?: boolean;
 }
 
 const ServiceCard = ({
@@ -24,6 +25,7 @@ const ServiceCard = ({
   onStart,
   onStop,
   onOpenInBrowser,
+  isLoading = false,
 }: ServiceCardProps) => {
   const [showLogs, setShowLogs] = useState(false);
 
@@ -51,8 +53,13 @@ const ServiceCard = ({
           size="sm"
           onClick={status === "running" ? onStop : onStart}
           className={status === "running" ? "" : "nvidia-gradient"}
+          disabled={isLoading}
         >
-          {status === "running" ? (
+          {isLoading ? (
+            <>
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" /> Loading...
+            </>
+          ) : status === "running" ? (
             <>
               <Square className="h-3 w-3 mr-1" /> Stop
             </>
