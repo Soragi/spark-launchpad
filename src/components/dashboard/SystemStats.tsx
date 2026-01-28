@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import GaugeChart from "./GaugeChart";
 import UsageChart from "./UsageChart";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Thermometer, Cpu } from "lucide-react";
+import { Thermometer, Cpu, Activity } from "lucide-react";
 
 interface SystemStatsProps {
   memoryUsed: number;
@@ -31,16 +31,16 @@ const SystemStats = ({
         <Card className="bg-card border-border">
           <CardContent className="p-6">
             <div className="flex flex-col lg:flex-row items-center justify-around gap-6">
-              <Skeleton className="h-32 w-32 rounded-full" />
-              <Skeleton className="w-full lg:w-48 h-32" />
+              <Skeleton className="h-28 w-40 rounded-xl" />
+              <Skeleton className="w-full lg:w-48 h-24 rounded-xl" />
             </div>
           </CardContent>
         </Card>
         <Card className="bg-card border-border">
           <CardContent className="p-6">
             <div className="flex flex-col lg:flex-row items-center justify-around gap-6">
-              <Skeleton className="h-32 w-32 rounded-full" />
-              <Skeleton className="w-full lg:w-48 h-32" />
+              <Skeleton className="h-28 w-40 rounded-xl" />
+              <Skeleton className="w-full lg:w-48 h-24 rounded-xl" />
             </div>
           </CardContent>
         </Card>
@@ -50,7 +50,8 @@ const SystemStats = ({
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <Card className="bg-card border-border">
+      {/* System Memory Card */}
+      <Card className="bg-card border-border overflow-hidden">
         <CardContent className="p-6">
           <div className="flex flex-col lg:flex-row items-center justify-around gap-6">
             <GaugeChart
@@ -59,17 +60,33 @@ const SystemStats = ({
               label="System Memory"
               unit="GB"
             />
-            <div className="w-full lg:w-48 h-32">
-              <div className="text-xs text-muted-foreground mb-2 text-right">
-                {memoryTotal.toFixed(0)}GB
+            <div className="w-full lg:w-52 space-y-2">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <Activity className="h-3 w-3" />
+                  Live Usage
+                </span>
+                <span className="font-mono">{memoryTotal.toFixed(0)} GB</span>
               </div>
-              <UsageChart data={memoryHistory} max={memoryTotal} color="hsl(var(--gauge-green))" />
+              <div className="h-20 bg-secondary/30 rounded-lg p-2">
+                <UsageChart 
+                  data={memoryHistory} 
+                  max={memoryTotal} 
+                  color="hsl(var(--gauge-green))"
+                  gradientId="memory-gradient"
+                />
+              </div>
+              <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
+                <span>-1m</span>
+                <span>now</span>
+              </div>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <Card className="bg-card border-border">
+      {/* GPU Utilization Card */}
+      <Card className="bg-card border-border overflow-hidden">
         <CardContent className="p-6">
           <div className="flex flex-col lg:flex-row items-center justify-around gap-6">
             <GaugeChart
@@ -78,24 +95,40 @@ const SystemStats = ({
               label="GPU Utilization"
               showPercentage
             />
-            <div className="w-full lg:w-48 h-32">
-              <div className="text-xs text-muted-foreground mb-2 text-right">
-                100%
+            <div className="w-full lg:w-52 space-y-2">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <Activity className="h-3 w-3" />
+                  Live Usage
+                </span>
+                <span className="font-mono">100%</span>
               </div>
-              <UsageChart data={gpuHistory} max={100} color="hsl(var(--gauge-green))" />
-              {/* GPU Temperature and Driver info */}
+              <div className="h-20 bg-secondary/30 rounded-lg p-2">
+                <UsageChart 
+                  data={gpuHistory} 
+                  max={100} 
+                  color="hsl(var(--primary))"
+                  gradientId="gpu-gradient"
+                />
+              </div>
+              <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
+                <span>-1m</span>
+                <span>now</span>
+              </div>
+              
+              {/* GPU Info badges */}
               {(gpuTemperature !== undefined || driverVersion) && (
-                <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
+                <div className="flex items-center gap-3 pt-2">
                   {gpuTemperature !== undefined && (
-                    <div className="flex items-center gap-1">
-                      <Thermometer className="h-3 w-3" />
-                      <span>{gpuTemperature}°C</span>
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-secondary/50 rounded-md text-xs">
+                      <Thermometer className="h-3 w-3 text-orange-400" />
+                      <span className="font-mono">{gpuTemperature}°C</span>
                     </div>
                   )}
                   {driverVersion && (
-                    <div className="flex items-center gap-1">
-                      <Cpu className="h-3 w-3" />
-                      <span>v{driverVersion}</span>
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-secondary/50 rounded-md text-xs">
+                      <Cpu className="h-3 w-3 text-primary" />
+                      <span className="font-mono">v{driverVersion}</span>
                     </div>
                   )}
                 </div>
