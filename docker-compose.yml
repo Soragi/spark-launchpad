@@ -28,9 +28,20 @@ services:
     volumes:
       # Mount Docker socket for sibling container management
       - /var/run/docker.sock:/var/run/docker.sock
+      # Mount nvidia-smi from host for GPU monitoring
+      - /usr/bin/nvidia-smi:/usr/bin/nvidia-smi:ro
+      - /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:ro
     environment:
       - DOCKER_HOST=unix:///var/run/docker.sock
     restart: unless-stopped
+    # Enable GPU access for nvidia-smi
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     # Add user to docker group for socket access
     group_add:
       - "999"  # docker group ID (may vary by system)

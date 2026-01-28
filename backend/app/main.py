@@ -7,6 +7,7 @@ import json
 import docker
 import os
 import asyncio
+import random
 from datetime import datetime
 
 app = FastAPI(title="DGX Spark API", version="1.0.0")
@@ -162,14 +163,19 @@ def run_nvidia_smi() -> dict:
                 "driver_version": parts[5],
             }
     except FileNotFoundError:
-        # nvidia-smi not available, return mock data for development
+        # nvidia-smi not available, return simulated data for development
+        # Add variation to make it clear this is simulated
+        base_gpu_util = random.uniform(0, 5)  # Idle GPU shows near 0%
+        base_mem_used = random.uniform(0.5, 2.0)  # Minimal memory usage
+        base_temp = random.uniform(35, 42)  # Cool idle temperature
+        
         return {
-            "gpu_name": "NVIDIA GB10 (Development Mode)",
-            "gpu_memory_used": 12.5,
+            "gpu_name": "Simulated GPU (Development Mode)",
+            "gpu_memory_used": round(base_mem_used, 2),
             "gpu_memory_total": 128.0,
-            "gpu_utilization": 15.0,
-            "gpu_temperature": 45.0,
-            "driver_version": "550.54.14",
+            "gpu_utilization": round(base_gpu_util, 1),
+            "gpu_temperature": round(base_temp, 0),
+            "driver_version": "dev-mode",
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
