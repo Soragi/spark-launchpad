@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: dgx-spark-frontend
+    container_name: spark-launchpad-frontend
     ports:
       - "8080:80"
     depends_on:
@@ -22,7 +22,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: dgx-spark-backend
+    container_name: spark-launchpad-backend
     ports:
       - "8000:8000"
     volumes:
