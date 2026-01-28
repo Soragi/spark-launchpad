@@ -1,73 +1,147 @@
-# Welcome to your Lovable project
+# DGX Spark WebUI
 
-## Project info
+A web-based dashboard for managing your DGX Spark system. Monitor system resources, deploy AI workloads with one click, and manage your API keys.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+![DGX Spark Dashboard](https://build.nvidia.com/_next/image?url=https%3A%2F%2Fassets.ngc.nvidia.com%2Fproducts%2Fapi-catalog%2Fspark%2Fdgx-spark-hero.jpg&w=1920&q=75)
 
-## How can I edit this code?
+## Features
 
-There are several ways of editing your application.
+- **📊 System Dashboard**: Monitor memory usage and GPU utilization in real-time
+- **🚀 Launchables**: One-click deployments for 30+ NVIDIA Spark playbooks
+- **🔑 API Key Management**: Securely store NGC and HuggingFace tokens
+- **🐳 Docker Ready**: Easy deployment with Docker
 
-**Use Lovable**
+## Quick Start
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+### Option 1: Docker Run (Easiest)
 
-Changes made via Lovable will be committed automatically to this repo.
+```bash
+# Build the image
+docker build -t dgx-spark-ui .
 
-**Use your preferred IDE**
+# Run the container
+docker run -d -p 8080:80 --name dgx-spark-ui dgx-spark-ui
+```
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+Access the UI at: **http://localhost:8080**
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Option 2: Docker Compose
 
-Follow these steps:
+```bash
+# Build and start
+docker-compose up -d
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+# View logs
+docker-compose logs -f
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# Stop
+docker-compose down
+```
 
-# Step 3: Install the necessary dependencies.
-npm i
+Access the UI at: **http://localhost:8080**
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+### Option 3: Development Mode
+
+```bash
+# Install dependencies
+npm install
+
+# Start dev server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Access the UI at: **http://localhost:5173**
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Configuration
 
-**Use GitHub Codespaces**
+### API Keys
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+The UI stores API keys locally in your browser's localStorage. To configure:
 
-## What technologies are used for this project?
+1. Navigate to **Settings** in the UI
+2. Enter your **NVIDIA NGC API Key** (get one at [ngc.nvidia.com](https://ngc.nvidia.com/setup/api-key))
+3. Enter your **HuggingFace Token** (get one at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens))
+4. Click **Save Settings**
 
-This project is built with:
+### Changing the Port
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+To run on a different port, modify the docker run command:
 
-## How can I deploy this project?
+```bash
+# Run on port 3000 instead
+docker run -d -p 3000:80 --name dgx-spark-ui dgx-spark-ui
+```
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+Or update `docker-compose.yml`:
 
-## Can I connect a custom domain to my Lovable project?
+```yaml
+ports:
+  - "3000:80"
+```
 
-Yes, you can!
+## Launchables
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+The UI includes all official NVIDIA Spark playbooks from [build.nvidia.com/spark](https://build.nvidia.com/spark):
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+### Quickstarts
+- VS Code
+- DGX Dashboard
+- Open WebUI with Ollama
+- Comfy UI
+
+### AI/ML Workloads
+- vLLM for Inference
+- SGLang for Inference
+- TensorRT-LLM
+- NeMo Fine-tuning
+- LLaMA Factory
+- And 20+ more...
+
+## Architecture
+
+```
+dgx-spark-ui/
+├── src/
+│   ├── components/
+│   │   ├── dashboard/     # Dashboard components (gauges, stats)
+│   │   ├── launchables/   # Launchable cards and grid
+│   │   ├── layout/        # Header, Layout components
+│   │   └── ui/            # Shadcn UI components
+│   ├── data/
+│   │   └── launchables.ts # All playbook definitions
+│   ├── pages/
+│   │   ├── Index.tsx      # Dashboard page
+│   │   ├── Launchables.tsx # Launchables browser
+│   │   └── Settings.tsx   # API key management
+│   └── App.tsx
+├── Dockerfile
+├── docker-compose.yml
+├── nginx.conf
+└── README.md
+```
+
+## Tech Stack
+
+- **React 18** + **TypeScript**
+- **Tailwind CSS** with custom NVIDIA theme
+- **Shadcn/ui** components
+- **Vite** for development and building
+- **Nginx** for production serving
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is for personal use with your DGX Spark system.
+
+## Support
+
+- [NVIDIA DGX Spark Support](https://www.nvidia.com/en-us/support/dgx-spark/)
+- [NVIDIA Developer Forums](https://forums.developer.nvidia.com/)
+- [DGX Spark Playbooks](https://build.nvidia.com/spark)
