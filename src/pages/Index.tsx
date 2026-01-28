@@ -114,7 +114,6 @@ const Index = () => {
             name="JupyterLab"
             status={jupyterStatus}
             icon={JupyterIcon}
-            workingDirectory="/home/jovyan/work"
             logs={jupyterStatus === "running" ? ["[I] Server running at http://localhost:8888/"] : []}
             onStart={handleStartJupyter}
             onStop={handleStopJupyter}
