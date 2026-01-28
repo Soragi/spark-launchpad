@@ -14,6 +14,36 @@ A modern web-based dashboard for managing your NVIDIA DGX Spark system. Monitor 
 
 ## Quick Start
 
+### Option 1: DGX Spark Custom Script (Recommended)
+
+Use the built-in launcher script for seamless integration with DGX Spark:
+
+```bash
+# Download the launch script
+curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/dgx-spark-webui/main/launch-dgx-spark-webui.sh -o launch-dgx-spark-webui.sh
+
+# Make it executable
+chmod +x launch-dgx-spark-webui.sh
+
+# Run it (or add to DGX Spark custom scripts)
+./launch-dgx-spark-webui.sh
+```
+
+**Adding to DGX Spark Custom Scripts:**
+1. Open DGX Spark Settings → Custom Scripts
+2. Click "Add Custom Script"
+3. Paste the contents of `launch-dgx-spark-webui.sh`
+4. Save and launch from the scripts menu
+
+**Configuration (optional):**
+```bash
+# Use a custom port
+PORT=9090 ./launch-dgx-spark-webui.sh
+
+# Use a custom repository URL
+REPO_URL=https://github.com/your-fork/dgx-spark-webui.git ./launch-dgx-spark-webui.sh
+```
+
 ### Prerequisites
 
 - Docker and Docker Compose installed
