@@ -1,8 +1,8 @@
-# DGX Spark WebUI
+# Spark Launchpad
 
 A modern web-based dashboard for managing your NVIDIA DGX Spark system. Monitor system resources in real-time with `nvidia-smi`, deploy AI workloads with one click, and manage configurations.
 
-![DGX Spark Dashboard](https://build.nvidia.com/_next/image?url=https%3A%2F%2Fassets.ngc.nvidia.com%2Fproducts%2Fapi-catalog%2Fspark%2Fdgx-spark-hero.jpg&w=1920&q=75)
+![Spark Launchpad Dashboard](https://build.nvidia.com/_next/image?url=https%3A%2F%2Fassets.ngc.nvidia.com%2Fproducts%2Fapi-catalog%2Fspark%2Fdgx-spark-hero.jpg&w=1920&q=75)
 
 ## Features
 
@@ -19,29 +19,20 @@ A modern web-based dashboard for managing your NVIDIA DGX Spark system. Monitor 
 Use the built-in launcher script for seamless integration with DGX Spark:
 
 ```bash
-# Download the launch script
-curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/dgx-spark-webui/main/launch-dgx-spark-webui.sh -o launch-dgx-spark-webui.sh
-
-# Make it executable
-chmod +x launch-dgx-spark-webui.sh
-
-# Run it (or add to DGX Spark custom scripts)
-./launch-dgx-spark-webui.sh
+# Run from the project directory
+./launch-spark-launchpad.sh
 ```
 
 **Adding to DGX Spark Custom Scripts:**
 1. Open DGX Spark Settings → Custom Scripts
 2. Click "Add Custom Script"
-3. Paste the contents of `launch-dgx-spark-webui.sh`
+3. Paste the contents of `launch-spark-launchpad.sh`
 4. Save and launch from the scripts menu
 
 **Configuration (optional):**
 ```bash
 # Use a custom port
-PORT=9090 ./launch-dgx-spark-webui.sh
-
-# Use a custom repository URL
-REPO_URL=https://github.com/your-fork/dgx-spark-webui.git ./launch-dgx-spark-webui.sh
+PORT=9090 ./launch-spark-launchpad.sh
 ```
 
 ### Prerequisites
@@ -50,12 +41,9 @@ REPO_URL=https://github.com/your-fork/dgx-spark-webui.git ./launch-dgx-spark-web
 - NVIDIA Container Toolkit (for GPU-accelerated deployments)
 - Access to Docker socket (for managing sibling containers)
 
-### Option 1: Docker Compose (Recommended)
+### Option 2: Docker Compose
 
 ```bash
-# Clone or download the project
-cd dgx-spark-ui
-
 # Build and run all services
 docker compose up -d
 
@@ -68,31 +56,31 @@ docker compose down
 
 The UI will be available at `http://localhost:8080`
 
-### Option 2: Build Images Separately
+### Option 3: Build Images Separately
 
 ```bash
 # Build frontend
-docker build -t dgx-spark-ui .
+docker build -t spark-launchpad-ui .
 
 # Build backend
-docker build -t dgx-spark-api ./backend
+docker build -t spark-launchpad-api ./backend
 
 # Run backend (needs Docker socket access)
 docker run -d \
-  --name dgx-spark-api \
+  --name spark-launchpad-api \
   -p 8000:8000 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   --group-add $(getent group docker | cut -d: -f3) \
-  dgx-spark-api
+  spark-launchpad-api
 
 # Run frontend
 docker run -d \
-  --name dgx-spark-ui \
+  --name spark-launchpad-ui \
   -p 8080:80 \
-  dgx-spark-ui
+  spark-launchpad-ui
 ```
 
-### Option 3: Development Mode
+### Option 4: Development Mode
 
 ```bash
 # Frontend

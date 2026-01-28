@@ -3,9 +3,9 @@
 set -euo pipefail
 
 # =============================================================================
-# DGX Spark WebUI Launcher
+# Spark Launchpad Launcher
 # =============================================================================
-# A custom script for launching the DGX Spark WebUI from the DGX Spark
+# A custom script for launching Spark Launchpad from the DGX Spark
 # custom scripts launcher. This script handles Docker container management
 # and provides real-time feedback.
 # =============================================================================
@@ -17,7 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # --- Cleanup handler ---
 cleanup() {
   echo ""
-  echo "Stopping DGX Spark WebUI..."
+  echo "Stopping Spark Launchpad..."
   docker compose down 2>/dev/null || true
   echo "Cleanup complete."
   exit 0
@@ -27,7 +27,7 @@ trap cleanup INT TERM HUP QUIT
 
 # --- Header ---
 echo "============================================================"
-echo "  DGX Spark WebUI Launcher"
+echo "  Spark Launchpad"
 echo "============================================================"
 echo "Port: ${PORT}"
 echo "Directory: ${SCRIPT_DIR}"
@@ -79,7 +79,7 @@ echo "✓ Build complete"
 # --- Start containers ---
 echo ""
 echo "============================================================"
-echo "  Starting DGX Spark WebUI"
+echo "  Starting Spark Launchpad"
 echo "============================================================"
 echo ""
 echo "  Frontend URL: http://localhost:${PORT}"
