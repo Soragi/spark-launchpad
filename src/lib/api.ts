@@ -19,6 +19,9 @@ export interface DeploymentStatus {
   container_id?: string;
   ports?: Record<string, string>;
   error?: string;
+  created_at?: string;
+  uptime?: string;
+  image?: string;
 }
 
 export interface DeploymentRequest {
@@ -107,4 +110,21 @@ export async function checkApiHealth(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+// Get container logs
+export async function getContainerLogs(launchableId: string, tail = 100): Promise<string[]> {
+  const response = await fetch(`${API_BASE_URL}/api/deployments/${launchableId}/logs?tail=${tail}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch logs: ${response.statusText}`);
+  }
+  const data = await response.json();
+  return data.logs;
+}
+
+// WebSocket URL for log streaming
+export function getLogsWebSocketUrl(launchableId: string): string {
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsHost = API_BASE_URL.replace(/^https?:\/\//, '');
+  return `${wsProtocol}//${wsHost}/ws/logs/${launchableId}`;
 }
