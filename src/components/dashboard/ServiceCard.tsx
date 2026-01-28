@@ -1,14 +1,12 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Play, Square, ExternalLink, FolderOpen, ChevronDown, Copy, Loader2 } from "lucide-react";
+import { Play, Square, ExternalLink, ChevronDown, Copy, Loader2 } from "lucide-react";
 
 interface ServiceCardProps {
   name: string;
   status: "running" | "stopped";
   icon?: React.ReactNode;
-  workingDirectory?: string;
   logs?: string[];
   onStart?: () => void;
   onStop?: () => void;
@@ -20,7 +18,6 @@ const ServiceCard = ({
   name,
   status,
   icon,
-  workingDirectory = "/home/user/jupyterlab",
   logs = [],
   onStart,
   onStop,
@@ -71,20 +68,6 @@ const ServiceCard = ({
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <label className="text-sm text-muted-foreground">Working Directory</label>
-          <div className="flex gap-2">
-            <Input
-              value={workingDirectory}
-              readOnly
-              className="font-mono text-sm bg-secondary border-border"
-            />
-            <Button variant="outline" size="icon" className="shrink-0">
-              <FolderOpen className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
         <div className="space-y-2">
           <div
             className="flex items-center justify-between cursor-pointer"
