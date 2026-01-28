@@ -1,4 +1,6 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// When running in Docker, use relative URLs (nginx proxies to backend)
+// When running locally for development, fall back to localhost:8000
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 export interface SystemStats {
   memory_used: number;
