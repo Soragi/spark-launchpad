@@ -1,13 +1,14 @@
-version: '3.8'
-
 services:
-  dgx-spark-ui:
+  # Frontend UI served by Nginx
+  frontend:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: dgx-spark-ui
+    container_name: dgx-spark-frontend
     ports:
       - "8080:80"
+    depends_on:
+      - backend
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/"]
@@ -15,3 +16,21 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  # Python FastAPI backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dgx-spark-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount Docker socket for sibling container management
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    restart: unless-stopped
+    # Add user to docker group for socket access
+    group_add:
+      - "999"  # docker group ID (may vary by system)

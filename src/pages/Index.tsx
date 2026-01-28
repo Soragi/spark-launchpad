@@ -1,45 +1,63 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Layout from "@/components/layout/Layout";
 import SystemStats from "@/components/dashboard/SystemStats";
 import ServiceCard from "@/components/dashboard/ServiceCard";
-import { Cpu, MonitorPlay, Rocket } from "lucide-react";
+import { Cpu, MonitorPlay, Rocket, AlertCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useSystemStats } from "@/hooks/use-system-stats";
+import { manageJupyterLab } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const Index = () => {
-  // Simulated system stats - in production these would come from system APIs
-  const [memoryUsed, setMemoryUsed] = useState(9.58);
-  const [gpuUtilization, setGpuUtilization] = useState(0);
-  const [memoryHistory, setMemoryHistory] = useState<number[]>([8, 9, 8.5, 9.2, 9.58, 10, 9.5, 9.58]);
-  const [gpuHistory, setGpuHistory] = useState<number[]>([0, 5, 2, 0, 3, 0, 0, 0]);
+  const { stats, memoryHistory, gpuHistory, isLoading, error } = useSystemStats();
   const [jupyterStatus, setJupyterStatus] = useState<"running" | "stopped">("stopped");
+  const [jupyterLoading, setJupyterLoading] = useState(false);
+  const { toast } = useToast();
 
-  // Simulate real-time updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const newMemory = memoryUsed + (Math.random() - 0.5) * 0.5;
-      const clampedMemory = Math.max(5, Math.min(20, newMemory));
-      setMemoryUsed(clampedMemory);
-      setMemoryHistory((prev) => [...prev.slice(-7), clampedMemory]);
-
-      const newGpu = jupyterStatus === "running" ? Math.random() * 30 : Math.random() * 5;
-      setGpuUtilization(newGpu);
-      setGpuHistory((prev) => [...prev.slice(-7), newGpu]);
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [memoryUsed, jupyterStatus]);
-
-  const handleStartJupyter = () => {
-    setJupyterStatus("running");
+  const handleStartJupyter = async () => {
+    setJupyterLoading(true);
+    try {
+      await manageJupyterLab("start");
+      setJupyterStatus("running");
+      toast({
+        title: "JupyterLab Started",
+        description: "JupyterLab is now running at http://localhost:8888",
+      });
+    } catch (err) {
+      toast({
+        title: "Failed to start JupyterLab",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setJupyterLoading(false);
+    }
   };
 
-  const handleStopJupyter = () => {
-    setJupyterStatus("stopped");
+  const handleStopJupyter = async () => {
+    setJupyterLoading(true);
+    try {
+      await manageJupyterLab("stop");
+      setJupyterStatus("stopped");
+      toast({
+        title: "JupyterLab Stopped",
+        description: "JupyterLab has been stopped.",
+      });
+    } catch (err) {
+      toast({
+        title: "Failed to stop JupyterLab",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setJupyterLoading(false);
+    }
   };
 
-  const JupyterIcon = () => (
+  const JupyterIcon = (
     <div className="text-orange-500 font-bold text-lg italic">
       jupyter<span className="text-orange-400">lab</span>
     </div>
@@ -61,18 +79,32 @@ const Index = () => {
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Cpu className="h-4 w-4 text-primary" />
-              <span>GB10 Grace Blackwell Superchip</span>
+              <span>{stats?.gpu_name || "GB10 Grace Blackwell Superchip"}</span>
             </div>
           </div>
         </div>
 
+        {/* API Connection Error */}
+        {error && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Unable to connect to backend API. System stats are unavailable. 
+              Make sure the backend is running on port 8000.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* System stats */}
         <SystemStats
-          memoryUsed={memoryUsed}
-          memoryTotal={128}
-          gpuUtilization={gpuUtilization}
+          memoryUsed={stats?.memory_used ?? 0}
+          memoryTotal={stats?.memory_total ?? 128}
+          gpuUtilization={stats?.gpu_utilization ?? 0}
           memoryHistory={memoryHistory}
           gpuHistory={gpuHistory}
+          gpuTemperature={stats?.gpu_temperature}
+          driverVersion={stats?.driver_version}
+          isLoading={isLoading}
         />
 
         {/* Main content grid */}
@@ -81,12 +113,13 @@ const Index = () => {
           <ServiceCard
             name="JupyterLab"
             status={jupyterStatus}
-            icon={<JupyterIcon />}
-            workingDirectory="/home/igaros/jupyterlab"
+            icon={JupyterIcon}
+            workingDirectory="/home/jovyan/work"
             logs={jupyterStatus === "running" ? ["[I] Server running at http://localhost:8888/"] : []}
             onStart={handleStartJupyter}
             onStop={handleStopJupyter}
             onOpenInBrowser={() => window.open("http://localhost:8888", "_blank")}
+            isLoading={jupyterLoading}
           />
 
           {/* Quick Links */}

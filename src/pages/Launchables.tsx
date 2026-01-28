@@ -4,7 +4,7 @@ import LaunchableCard, { Launchable } from "@/components/launchables/LaunchableC
 import { launchables } from "@/data/launchables";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, Rocket, AlertCircle } from "lucide-react";
+import { Search, Rocket, AlertCircle, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
+import { useDeployments } from "@/hooks/use-deployments";
 
 const Launchables = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -23,6 +24,7 @@ const Launchables = () => {
   const [deployDialog, setDeployDialog] = useState<Launchable | null>(null);
   const [isDeploying, setIsDeploying] = useState(false);
   const { toast } = useToast();
+  const { deploy, stop, getDeploymentStatus } = useDeployments();
 
   const filteredLaunchables = launchables.filter((l) => {
     const matchesSearch =
@@ -36,24 +38,43 @@ const Launchables = () => {
   });
 
   const handleDeploy = (launchable: Launchable) => {
-    setDeployDialog(launchable);
+    const status = getDeploymentStatus(launchable.id);
+    if (status?.status === "running") {
+      // If running, stop it
+      stop(launchable.id);
+    } else {
+      // If not running, show deploy dialog
+      setDeployDialog(launchable);
+    }
   };
 
   const confirmDeploy = async () => {
     if (!deployDialog) return;
 
+    // Check if API key is required but not configured
+    if (deployDialog.requiresApiKey) {
+      const hfKey = localStorage.getItem("hf_api_key");
+      if (!hfKey) {
+        toast({
+          title: "API Key Required",
+          description: "Please configure your HuggingFace API key in Settings first.",
+          variant: "destructive",
+        });
+        setDeployDialog(null);
+        return;
+      }
+    }
+
     setIsDeploying(true);
 
-    // Simulate deployment
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    toast({
-      title: "Deployment Started",
-      description: `${deployDialog.title} is now being deployed. Check the logs for progress.`,
-    });
-
-    setIsDeploying(false);
-    setDeployDialog(null);
+    try {
+      await deploy(deployDialog.id, deployDialog.requiresApiKey);
+      setDeployDialog(null);
+    } catch (error) {
+      // Error already handled in hook
+    } finally {
+      setIsDeploying(false);
+    }
   };
 
   const quickstarts = launchables.filter((l) => l.category === "quickstart");
@@ -104,6 +125,7 @@ const Launchables = () => {
                       key={launchable.id}
                       launchable={launchable}
                       onDeploy={handleDeploy}
+                      deploymentStatus={getDeploymentStatus(launchable.id)}
                     />
                   ))}
                 </div>
@@ -119,6 +141,7 @@ const Launchables = () => {
                         key={launchable.id}
                         launchable={launchable}
                         onDeploy={handleDeploy}
+                        deploymentStatus={getDeploymentStatus(launchable.id)}
                       />
                     ))}
                   </div>
@@ -133,6 +156,7 @@ const Launchables = () => {
                         key={launchable.id}
                         launchable={launchable}
                         onDeploy={handleDeploy}
+                        deploymentStatus={getDeploymentStatus(launchable.id)}
                       />
                     ))}
                   </div>
@@ -147,6 +171,7 @@ const Launchables = () => {
                         key={launchable.id}
                         launchable={launchable}
                         onDeploy={handleDeploy}
+                        deploymentStatus={getDeploymentStatus(launchable.id)}
                       />
                     ))}
                   </div>
@@ -162,6 +187,7 @@ const Launchables = () => {
                   key={launchable.id}
                   launchable={launchable}
                   onDeploy={handleDeploy}
+                  deploymentStatus={getDeploymentStatus(launchable.id)}
                 />
               ))}
             </div>
@@ -174,6 +200,7 @@ const Launchables = () => {
                   key={launchable.id}
                   launchable={launchable}
                   onDeploy={handleDeploy}
+                  deploymentStatus={getDeploymentStatus(launchable.id)}
                 />
               ))}
             </div>
