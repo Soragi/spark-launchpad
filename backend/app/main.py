@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
@@ -6,6 +6,8 @@ import subprocess
 import json
 import docker
 import os
+import asyncio
+from datetime import datetime
 
 app = FastAPI(title="DGX Spark API", version="1.0.0")
 
@@ -47,6 +49,9 @@ class DeploymentStatus(BaseModel):
     container_id: Optional[str] = None
     ports: Optional[dict] = None
     error: Optional[str] = None
+    created_at: Optional[str] = None
+    uptime: Optional[str] = None
+    image: Optional[str] = None
 
 
 class ServiceAction(BaseModel):
@@ -222,6 +227,28 @@ async def get_system_stats():
     )
 
 
+def calculate_uptime(started_at: str) -> str:
+    """Calculate human-readable uptime from container start time"""
+    try:
+        # Parse ISO format datetime
+        start_time = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+        now = datetime.now(start_time.tzinfo)
+        delta = now - start_time
+        
+        days = delta.days
+        hours, remainder = divmod(delta.seconds, 3600)
+        minutes, _ = divmod(remainder, 60)
+        
+        if days > 0:
+            return f"{days}d {hours}h {minutes}m"
+        elif hours > 0:
+            return f"{hours}h {minutes}m"
+        else:
+            return f"{minutes}m"
+    except Exception:
+        return "unknown"
+
+
 @app.get("/api/deployments", response_model=List[DeploymentStatus])
 async def list_deployments():
     """List all DGX Spark deployments"""
@@ -236,6 +263,11 @@ async def list_deployments():
                         if bindings:
                             ports[port] = bindings[0].get("HostPort")
 
+                # Get container details
+                state = container.attrs.get("State", {})
+                started_at = state.get("StartedAt", "")
+                uptime = calculate_uptime(started_at) if container.status == "running" else None
+                
                 deployments.append(
                     DeploymentStatus(
                         id=container.name.replace("dgx-spark-", ""),
@@ -243,6 +275,9 @@ async def list_deployments():
                         status=container.status,
                         container_id=container.short_id,
                         ports=ports,
+                        created_at=started_at,
+                        uptime=uptime,
+                        image=container.image.tags[0] if container.image.tags else container.image.short_id,
                     )
                 )
     except docker.errors.DockerException as e:
@@ -374,3 +409,56 @@ async def manage_jupyterlab(action: ServiceAction):
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "service": "dgx-spark-api"}
+
+
+@app.get("/api/deployments/{launchable_id}/logs")
+async def get_container_logs(launchable_id: str, tail: int = 100):
+    """Get recent logs from a container"""
+    container_name = f"dgx-spark-{launchable_id}"
+    try:
+        container = docker_client.containers.get(container_name)
+        logs = container.logs(tail=tail, timestamps=True).decode("utf-8")
+        return {"logs": logs.split("\n")}
+    except docker.errors.NotFound:
+        raise HTTPException(status_code=404, detail=f"Container '{launchable_id}' not found")
+    except docker.errors.DockerException as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get logs: {str(e)}")
+
+
+@app.websocket("/ws/logs/{launchable_id}")
+async def websocket_logs(websocket: WebSocket, launchable_id: str):
+    """Stream container logs via WebSocket"""
+    await websocket.accept()
+    
+    container_name = f"dgx-spark-{launchable_id}"
+    
+    try:
+        container = docker_client.containers.get(container_name)
+        
+        # Send initial logs
+        initial_logs = container.logs(tail=50, timestamps=True).decode("utf-8")
+        for line in initial_logs.split("\n"):
+            if line.strip():
+                await websocket.send_json({"type": "log", "message": line})
+        
+        # Stream new logs
+        log_stream = container.logs(stream=True, follow=True, timestamps=True, since=datetime.now())
+        
+        for log_line in log_stream:
+            try:
+                line = log_line.decode("utf-8").strip()
+                if line:
+                    await websocket.send_json({"type": "log", "message": line})
+            except WebSocketDisconnect:
+                break
+            except Exception:
+                continue
+                
+    except docker.errors.NotFound:
+        await websocket.send_json({"type": "error", "message": f"Container '{launchable_id}' not found"})
+        await websocket.close()
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        await websocket.send_json({"type": "error", "message": str(e)})
+        await websocket.close()

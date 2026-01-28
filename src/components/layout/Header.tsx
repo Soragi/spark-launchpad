@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { ExternalLink, Cpu } from "lucide-react";
+import { ExternalLink, Cpu, Container } from "lucide-react";
 
 const Header = () => {
   return (
@@ -38,6 +38,19 @@ const Header = () => {
             }
           >
             Launchables
+          </NavLink>
+          <NavLink
+            to="/deployments"
+            className={({ isActive }) =>
+              `px-3 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-1 ${
+                isActive
+                  ? "text-foreground bg-secondary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+              }`
+            }
+          >
+            <Container className="h-4 w-4" />
+            Deployments
           </NavLink>
           <NavLink
             to="/settings"
