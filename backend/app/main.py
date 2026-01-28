@@ -20,8 +20,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Docker client - connects to host Docker via socket
-docker_client = docker.from_env()
+# Docker client - lazy initialization for resilience
+_docker_client = None
+
+
+def get_docker_client():
+    """Get Docker client with lazy initialization and error handling"""
+    global _docker_client
+    if _docker_client is None:
+        try:
+            _docker_client = docker.from_env()
+            # Test connection
+            _docker_client.ping()
+        except docker.errors.DockerException as e:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Docker is not available: {str(e)}. Ensure the Docker socket is mounted."
+            )
+    return _docker_client
 
 
 class SystemStats(BaseModel):
@@ -254,6 +270,7 @@ async def list_deployments():
     """List all DGX Spark deployments"""
     deployments = []
     try:
+        docker_client = get_docker_client()
         containers = docker_client.containers.list(all=True)
         for container in containers:
             if container.name.startswith("dgx-spark-"):
@@ -301,6 +318,7 @@ async def deploy_launchable(launchable_id: str, request: DeploymentRequest):
         )
 
     try:
+        docker_client = get_docker_client()
         # Check if container already exists
         try:
             existing = docker_client.containers.get(config["name"])
@@ -362,6 +380,7 @@ async def stop_deployment(launchable_id: str):
     """Stop and remove a deployment"""
     container_name = f"dgx-spark-{launchable_id}"
     try:
+        docker_client = get_docker_client()
         container = docker_client.containers.get(container_name)
         container.stop(timeout=10)
         container.remove()
@@ -381,6 +400,7 @@ async def manage_jupyterlab(action: ServiceAction):
         if action.action == "start":
             return await deploy_launchable("jupyterlab", DeploymentRequest(launchable_id="jupyterlab"))
         elif action.action == "stop":
+            docker_client = get_docker_client()
             container = docker_client.containers.get(container_name)
             container.stop(timeout=10)
             return DeploymentStatus(
@@ -389,6 +409,7 @@ async def manage_jupyterlab(action: ServiceAction):
                 status="stopped",
             )
         elif action.action == "restart":
+            docker_client = get_docker_client()
             container = docker_client.containers.get(container_name)
             container.restart(timeout=10)
             return DeploymentStatus(
@@ -416,6 +437,7 @@ async def get_container_logs(launchable_id: str, tail: int = 100):
     """Get recent logs from a container"""
     container_name = f"dgx-spark-{launchable_id}"
     try:
+        docker_client = get_docker_client()
         container = docker_client.containers.get(container_name)
         logs = container.logs(tail=tail, timestamps=True).decode("utf-8")
         return {"logs": logs.split("\n")}
@@ -433,6 +455,7 @@ async def websocket_logs(websocket: WebSocket, launchable_id: str):
     container_name = f"dgx-spark-{launchable_id}"
     
     try:
+        docker_client = get_docker_client()
         container = docker_client.containers.get(container_name)
         
         # Send initial logs
