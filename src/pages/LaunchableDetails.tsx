@@ -16,7 +16,6 @@ import {
   AlertTriangle,
   Rocket,
   Terminal,
-  FileCode,
   Info,
   Lightbulb,
   BookOpen
@@ -118,51 +117,6 @@ const LaunchableDetails = () => {
         description: apiKeys.ngcApiKey || apiKeys.hfToken 
           ? `${allCodeBlocks.length} commands copied with your API keys` 
           : `${allCodeBlocks.length} commands copied to clipboard`,
-      });
-    } else {
-      toast({
-        title: "Failed to copy",
-        description: "Could not copy to clipboard. Try selecting the text manually.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const copyAsScript = async () => {
-    if (!allCodeBlocks.length || !launchable || !instructions) return;
-    
-    const scriptContent = `#!/usr/bin/env bash
-
-# =============================================================================
-# ${launchable.title}
-# =============================================================================
-# Generated from DGX Spark Launchpad
-# ${launchable.description}
-# =============================================================================
-
-set -euo pipefail
-
-echo "Starting deployment: ${launchable.title}"
-echo "============================================="
-
-${instructions.steps
-  .filter(step => step.code)
-  .map((step, i) => `# Step ${i + 1}: ${step.title}\necho "Step ${i + 1}: ${step.title}..."\n${substituteApiKeys(step.code as string)}`)
-  .join('\n\n')}
-
-echo ""
-echo "============================================="
-echo "Deployment complete!"
-`;
-    
-    const success = await copyToClipboard(scriptContent);
-    
-    if (success) {
-      toast({
-        title: "Script copied!",
-        description: apiKeys.ngcApiKey || apiKeys.hfToken 
-          ? "Shell script copied with your API keys. Save as .sh file and run with bash." 
-          : "Shell script copied to clipboard. Save as .sh file and run with bash.",
       });
     } else {
       toast({
@@ -319,16 +273,10 @@ echo "Deployment complete!"
               )}
             </CardTitle>
             {allCodeBlocks.length > 0 && (
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={copyAsScript}>
-                  <FileCode className="h-4 w-4 mr-2" />
-                  Copy as Script
-                </Button>
-                <Button variant="outline" size="sm" onClick={copyAllCommands}>
-                  <Copy className="h-4 w-4 mr-2" />
-                  Copy All
-                </Button>
-              </div>
+              <Button variant="outline" size="sm" onClick={copyAllCommands}>
+                <Copy className="h-4 w-4 mr-2" />
+                Copy All
+              </Button>
             )}
           </CardHeader>
           <CardContent>
