@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
@@ -8,7 +8,11 @@ import docker
 import os
 import asyncio
 import random
+import re
+import uuid
+import httpx
 from datetime import datetime
+from bs4 import BeautifulSoup
 
 app = FastAPI(title="DGX Spark API", version="1.0.0")
 
@@ -23,6 +27,9 @@ app.add_middleware(
 
 # Docker client - lazy initialization for resilience
 _docker_client = None
+
+# In-memory job storage for deployment tracking
+deployment_jobs = {}
 
 
 def get_docker_client():
@@ -73,6 +80,32 @@ class DeploymentStatus(BaseModel):
 
 class ServiceAction(BaseModel):
     action: str  # start, stop, restart
+
+
+class AutoDeployRequest(BaseModel):
+    launchable_id: str
+    ngc_api_key: Optional[str] = None
+    hf_api_key: Optional[str] = None
+    dry_run: bool = False
+
+
+class DeploymentJob(BaseModel):
+    id: str
+    launchable_id: str
+    status: str  # pending, running, completed, failed
+    commands: List[str] = []
+    current_step: int = 0
+    total_steps: int = 0
+    logs: List[str] = []
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    error: Optional[str] = None
+
+
+class InstructionsResponse(BaseModel):
+    launchable_id: str
+    commands: List[str]
+    raw_html: Optional[str] = None
 
 
 # Launchable deployment configurations
@@ -133,6 +166,213 @@ LAUNCHABLE_CONFIGS = {
         "requires_api_key": True,
     },
 }
+
+# Allowed command patterns for security
+ALLOWED_COMMAND_PATTERNS = [
+    r'^docker\s+',
+    r'^git\s+',
+    r'^wget\s+',
+    r'^curl\s+',
+    r'^pip\s+',
+    r'^pip3\s+',
+    r'^python\s+',
+    r'^python3\s+',
+    r'^chmod\s+',
+    r'^mkdir\s+',
+    r'^cd\s+',
+    r'^export\s+',
+    r'^echo\s+',
+    r'^cat\s+',
+    r'^sudo\s+docker\s+',
+]
+
+
+def is_command_allowed(command: str) -> bool:
+    """Check if a command matches allowed patterns"""
+    command = command.strip()
+    for pattern in ALLOWED_COMMAND_PATTERNS:
+        if re.match(pattern, command, re.IGNORECASE):
+            return True
+    return False
+
+
+def extract_commands_from_html(html_content: str) -> List[str]:
+    """Extract shell commands from HTML content"""
+    soup = BeautifulSoup(html_content, 'html.parser')
+    commands = []
+    
+    # Find code blocks - common patterns in documentation pages
+    # Pattern 1: <pre><code> blocks
+    for pre in soup.find_all('pre'):
+        code = pre.get_text(strip=True)
+        if code:
+            # Split by newlines and filter empty lines
+            for line in code.split('\n'):
+                line = line.strip()
+                # Skip comments and empty lines
+                if line and not line.startswith('#') and is_command_allowed(line):
+                    commands.append(line)
+    
+    # Pattern 2: code elements with specific classes
+    for code in soup.find_all('code', class_=re.compile(r'(bash|shell|sh|language-bash|language-shell)')):
+        text = code.get_text(strip=True)
+        if text and is_command_allowed(text):
+            commands.append(text)
+    
+    # Pattern 3: Look for divs with copy button indicators
+    for div in soup.find_all(['div', 'span'], class_=re.compile(r'(copy|code|command)')):
+        code_elem = div.find('code') or div.find('pre')
+        if code_elem:
+            text = code_elem.get_text(strip=True)
+            if text and is_command_allowed(text):
+                commands.append(text)
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_commands = []
+    for cmd in commands:
+        if cmd not in seen:
+            seen.add(cmd)
+            unique_commands.append(cmd)
+    
+    return unique_commands
+
+
+def inject_api_keys(command: str, ngc_api_key: Optional[str], hf_api_key: Optional[str]) -> str:
+    """Inject API keys into docker run commands"""
+    if not command.strip().startswith('docker run'):
+        return command
+    
+    env_vars = []
+    if hf_api_key:
+        env_vars.append(f'-e HF_TOKEN={hf_api_key}')
+        env_vars.append(f'-e HUGGING_FACE_HUB_TOKEN={hf_api_key}')
+    if ngc_api_key:
+        env_vars.append(f'-e NGC_API_KEY={ngc_api_key}')
+    
+    if not env_vars:
+        return command
+    
+    # Find position to insert env vars (after 'docker run' and any existing flags before image name)
+    # Insert after 'docker run'
+    parts = command.split('docker run', 1)
+    if len(parts) == 2:
+        return f"docker run {' '.join(env_vars)} {parts[1].strip()}"
+    
+    return command
+
+
+async def fetch_instructions(launchable_id: str) -> tuple[List[str], str]:
+    """Fetch and parse instructions from NVIDIA build page"""
+    url = f"https://build.nvidia.com/spark/{launchable_id}/instructions"
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            response = await client.get(url, follow_redirects=True)
+            response.raise_for_status()
+            html_content = response.text
+            commands = extract_commands_from_html(html_content)
+            return commands, html_content
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(
+                status_code=e.response.status_code,
+                detail=f"Failed to fetch instructions: {str(e)}"
+            )
+        except httpx.RequestError as e:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Failed to connect to NVIDIA: {str(e)}"
+            )
+
+
+async def execute_command(command: str, job_id: str, env: dict) -> tuple[bool, str]:
+    """Execute a shell command and return success status and output"""
+    try:
+        # Log the command being executed (without sensitive data)
+        safe_cmd = re.sub(r'(HF_TOKEN|NGC_API_KEY|HUGGING_FACE_HUB_TOKEN)=[^\s]+', r'\1=***', command)
+        deployment_jobs[job_id]["logs"].append(f"$ {safe_cmd}")
+        
+        # Run command with timeout
+        process = await asyncio.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env={**os.environ, **env}
+        )
+        
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(),
+                timeout=1800  # 30 minute timeout
+            )
+        except asyncio.TimeoutError:
+            process.kill()
+            return False, "Command timed out after 30 minutes"
+        
+        stdout_text = stdout.decode('utf-8', errors='replace')
+        stderr_text = stderr.decode('utf-8', errors='replace')
+        
+        # Log output
+        if stdout_text:
+            for line in stdout_text.split('\n')[:50]:  # Limit log lines
+                if line.strip():
+                    deployment_jobs[job_id]["logs"].append(line)
+        
+        if process.returncode != 0:
+            if stderr_text:
+                for line in stderr_text.split('\n')[:20]:
+                    if line.strip():
+                        deployment_jobs[job_id]["logs"].append(f"ERROR: {line}")
+            return False, stderr_text or f"Command failed with exit code {process.returncode}"
+        
+        return True, stdout_text
+        
+    except Exception as e:
+        return False, str(e)
+
+
+async def run_auto_deploy(job_id: str, commands: List[str], ngc_api_key: Optional[str], hf_api_key: Optional[str]):
+    """Background task to run automated deployment"""
+    job = deployment_jobs.get(job_id)
+    if not job:
+        return
+    
+    job["status"] = "running"
+    job["started_at"] = datetime.now().isoformat()
+    job["total_steps"] = len(commands)
+    
+    # Build environment
+    env = {}
+    if hf_api_key:
+        env["HF_TOKEN"] = hf_api_key
+        env["HUGGING_FACE_HUB_TOKEN"] = hf_api_key
+    if ngc_api_key:
+        env["NGC_API_KEY"] = ngc_api_key
+    
+    try:
+        for i, command in enumerate(commands):
+            job["current_step"] = i + 1
+            job["logs"].append(f"\n--- Step {i + 1}/{len(commands)} ---")
+            
+            # Inject API keys into docker commands
+            modified_command = inject_api_keys(command, ngc_api_key, hf_api_key)
+            
+            success, output = await execute_command(modified_command, job_id, env)
+            
+            if not success:
+                job["status"] = "failed"
+                job["error"] = output
+                job["completed_at"] = datetime.now().isoformat()
+                return
+        
+        job["status"] = "completed"
+        job["completed_at"] = datetime.now().isoformat()
+        job["logs"].append("\n✓ Deployment completed successfully!")
+        
+    except Exception as e:
+        job["status"] = "failed"
+        job["error"] = str(e)
+        job["completed_at"] = datetime.now().isoformat()
 
 
 def run_nvidia_smi() -> dict:
@@ -453,6 +693,86 @@ async def get_container_logs(launchable_id: str, tail: int = 100):
         raise HTTPException(status_code=500, detail=f"Failed to get logs: {str(e)}")
 
 
+# ============ Auto-Deploy Endpoints ============
+
+@app.get("/api/launchables/{launchable_id}/instructions", response_model=InstructionsResponse)
+async def get_launchable_instructions(launchable_id: str):
+    """Fetch and parse installation instructions from NVIDIA"""
+    commands, html_content = await fetch_instructions(launchable_id)
+    
+    return InstructionsResponse(
+        launchable_id=launchable_id,
+        commands=commands,
+        raw_html=html_content[:5000] if html_content else None  # Limit raw HTML size
+    )
+
+
+@app.post("/api/launchables/{launchable_id}/auto-deploy", response_model=DeploymentJob)
+async def auto_deploy_launchable(
+    launchable_id: str,
+    request: AutoDeployRequest,
+    background_tasks: BackgroundTasks
+):
+    """Start automated deployment from NVIDIA instructions"""
+    # Fetch instructions
+    commands, _ = await fetch_instructions(launchable_id)
+    
+    if not commands:
+        raise HTTPException(
+            status_code=400,
+            detail="No executable commands found in instructions"
+        )
+    
+    # Create job
+    job_id = str(uuid.uuid4())
+    job = {
+        "id": job_id,
+        "launchable_id": launchable_id,
+        "status": "pending",
+        "commands": commands,
+        "current_step": 0,
+        "total_steps": len(commands),
+        "logs": [f"Starting automated deployment for {launchable_id}..."],
+        "started_at": None,
+        "completed_at": None,
+        "error": None,
+    }
+    
+    deployment_jobs[job_id] = job
+    
+    if request.dry_run:
+        job["status"] = "dry_run"
+        job["logs"].append("Dry run mode - commands will not be executed")
+        job["logs"].extend([f"Would execute: {cmd}" for cmd in commands])
+        return DeploymentJob(**job)
+    
+    # Start background deployment
+    background_tasks.add_task(
+        run_auto_deploy,
+        job_id,
+        commands,
+        request.ngc_api_key,
+        request.hf_api_key
+    )
+    
+    return DeploymentJob(**job)
+
+
+@app.get("/api/deployments/jobs/{job_id}", response_model=DeploymentJob)
+async def get_deployment_job(job_id: str):
+    """Get status of a deployment job"""
+    job = deployment_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+    return DeploymentJob(**job)
+
+
+@app.get("/api/deployments/jobs", response_model=List[DeploymentJob])
+async def list_deployment_jobs():
+    """List all deployment jobs"""
+    return [DeploymentJob(**job) for job in deployment_jobs.values()]
+
+
 @app.websocket("/ws/logs/{launchable_id}")
 async def websocket_logs(websocket: WebSocket, launchable_id: str):
     """Stream container logs via WebSocket"""
@@ -486,6 +806,56 @@ async def websocket_logs(websocket: WebSocket, launchable_id: str):
     except docker.errors.NotFound:
         await websocket.send_json({"type": "error", "message": f"Container '{launchable_id}' not found"})
         await websocket.close()
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        await websocket.send_json({"type": "error", "message": str(e)})
+        await websocket.close()
+
+
+@app.websocket("/ws/jobs/{job_id}")
+async def websocket_job_logs(websocket: WebSocket, job_id: str):
+    """Stream deployment job logs via WebSocket"""
+    await websocket.accept()
+    
+    job = deployment_jobs.get(job_id)
+    if not job:
+        await websocket.send_json({"type": "error", "message": f"Job '{job_id}' not found"})
+        await websocket.close()
+        return
+    
+    last_log_index = 0
+    
+    try:
+        while True:
+            job = deployment_jobs.get(job_id)
+            if not job:
+                break
+            
+            # Send new logs
+            current_logs = job.get("logs", [])
+            if len(current_logs) > last_log_index:
+                for log in current_logs[last_log_index:]:
+                    await websocket.send_json({
+                        "type": "log",
+                        "message": log,
+                        "status": job["status"],
+                        "current_step": job["current_step"],
+                        "total_steps": job["total_steps"]
+                    })
+                last_log_index = len(current_logs)
+            
+            # Check if job is complete
+            if job["status"] in ["completed", "failed", "dry_run"]:
+                await websocket.send_json({
+                    "type": "complete",
+                    "status": job["status"],
+                    "error": job.get("error")
+                })
+                break
+            
+            await asyncio.sleep(0.5)
+            
     except WebSocketDisconnect:
         pass
     except Exception as e:
