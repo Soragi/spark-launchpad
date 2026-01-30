@@ -1,14 +1,26 @@
 import { useState } from "react";
 import Layout from "@/components/layout/Layout";
-import LaunchableCard from "@/components/launchables/LaunchableCard";
+import LaunchableCard, { Launchable } from "@/components/launchables/LaunchableCard";
 import { launchables } from "@/data/launchables";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Search, Rocket } from "lucide-react";
+import { useSavedLaunchables } from "@/hooks/use-saved-launchables";
+import { useToast } from "@/hooks/use-toast";
 
 const Launchables = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState("all");
+  const { addLaunchable, isLaunchableSaved } = useSavedLaunchables();
+  const { toast } = useToast();
+
+  const handleAddToDeployments = (launchable: Launchable) => {
+    addLaunchable(launchable);
+    toast({
+      title: "Added to Deployments",
+      description: `${launchable.title} has been added to your deployments.`,
+    });
+  };
 
   const filteredLaunchables = launchables.filter((l) => {
     const matchesSearch =
@@ -68,6 +80,8 @@ const Launchables = () => {
                     <LaunchableCard
                       key={launchable.id}
                       launchable={launchable}
+                      onAddToDeployments={handleAddToDeployments}
+                      isSaved={isLaunchableSaved(launchable.id)}
                     />
                   ))}
                 </div>
@@ -82,6 +96,8 @@ const Launchables = () => {
                       <LaunchableCard
                         key={launchable.id}
                         launchable={launchable}
+                        onAddToDeployments={handleAddToDeployments}
+                        isSaved={isLaunchableSaved(launchable.id)}
                       />
                     ))}
                   </div>
@@ -95,6 +111,8 @@ const Launchables = () => {
                       <LaunchableCard
                         key={launchable.id}
                         launchable={launchable}
+                        onAddToDeployments={handleAddToDeployments}
+                        isSaved={isLaunchableSaved(launchable.id)}
                       />
                     ))}
                   </div>
@@ -108,6 +126,8 @@ const Launchables = () => {
                       <LaunchableCard
                         key={launchable.id}
                         launchable={launchable}
+                        onAddToDeployments={handleAddToDeployments}
+                        isSaved={isLaunchableSaved(launchable.id)}
                       />
                     ))}
                   </div>
@@ -122,6 +142,8 @@ const Launchables = () => {
                 <LaunchableCard
                   key={launchable.id}
                   launchable={launchable}
+                  onAddToDeployments={handleAddToDeployments}
+                  isSaved={isLaunchableSaved(launchable.id)}
                 />
               ))}
             </div>
@@ -133,6 +155,8 @@ const Launchables = () => {
                 <LaunchableCard
                   key={launchable.id}
                   launchable={launchable}
+                  onAddToDeployments={handleAddToDeployments}
+                  isSaved={isLaunchableSaved(launchable.id)}
                 />
               ))}
             </div>
