@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { launchables } from "@/data/launchables";
 import { getInstructions, type LaunchableInstructions } from "@/data/launchableInstructions";
-import { openTerminal } from "@/lib/api";
+
 import { useToast } from "@/hooks/use-toast";
 
 interface ApiKeys {
@@ -37,7 +37,7 @@ const LaunchableDetails = () => {
   const { toast } = useToast();
   
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-  const [isOpeningTerminal, setIsOpeningTerminal] = useState(false);
+  
   const [apiKeys, setApiKeys] = useState<ApiKeys>({ ngcApiKey: "", hfToken: "" });
 
   // Load saved API keys from localStorage
@@ -173,21 +173,26 @@ echo "Deployment complete!"
   };
 
   const handleOpenTerminal = async () => {
-    setIsOpeningTerminal(true);
-    try {
-      await openTerminal();
+    // Copy commands and show instructions for opening terminal manually
+    if (allCodeBlocks.length > 0) {
+      try {
+        const allCommands = allCodeBlocks.map(substituteApiKeys).join('\n\n');
+        await navigator.clipboard.writeText(allCommands);
+        toast({
+          title: "Commands copied to clipboard!",
+          description: "Open a terminal on your DGX Spark and paste the commands to run them.",
+        });
+      } catch {
+        toast({
+          title: "Open Terminal on DGX Spark",
+          description: "Use SSH or the desktop environment to open a terminal, then copy the commands from this page.",
+        });
+      }
+    } else {
       toast({
-        title: "Terminal Opened",
-        description: "A terminal window has been opened on your DGX Spark.",
+        title: "Open Terminal on DGX Spark",
+        description: "Use SSH or the desktop environment to open a terminal on your DGX Spark system.",
       });
-    } catch (err) {
-      toast({
-        title: "Failed to open terminal",
-        description: err instanceof Error ? err.message : "Could not open terminal",
-        variant: "destructive",
-      });
-    } finally {
-      setIsOpeningTerminal(false);
     }
   };
 
@@ -243,10 +248,9 @@ echo "Deployment complete!"
             <Button 
               variant="outline" 
               onClick={handleOpenTerminal}
-              disabled={isOpeningTerminal}
             >
               <Terminal className="h-4 w-4 mr-2" />
-              {isOpeningTerminal ? "Opening..." : "Open Terminal"}
+              Copy & Open Terminal
             </Button>
             <Button asChild className="nvidia-gradient nvidia-glow">
               <a href={launchable.url} target="_blank" rel="noopener noreferrer">
