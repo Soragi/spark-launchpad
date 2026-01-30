@@ -1,11 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Skeleton } from "@/components/ui/skeleton";
 import CodeBlock from "@/components/code/CodeBlock";
 import { 
   ArrowLeft, 
@@ -17,10 +16,12 @@ import {
   AlertTriangle,
   Rocket,
   Terminal,
-  FileCode
+  FileCode,
+  Info
 } from "lucide-react";
 import { launchables } from "@/data/launchables";
-import { fetchInstructions, openTerminal, type InstructionsResponse } from "@/lib/api";
+import { getInstructions, type LaunchableInstructions } from "@/data/launchableInstructions";
+import { openTerminal } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 const LaunchableDetails = () => {
@@ -28,33 +29,15 @@ const LaunchableDetails = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   
-  const [instructions, setInstructions] = useState<InstructionsResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [isOpeningTerminal, setIsOpeningTerminal] = useState(false);
 
   const launchable = launchables.find(l => l.id === id);
-
-  useEffect(() => {
-    if (!id) return;
-
-    const loadInstructions = async () => {
-      setIsLoading(true);
-      setError(null);
-      
-      try {
-        const data = await fetchInstructions(id);
-        setInstructions(data);
-      } catch (err) {
-        console.error("Failed to fetch instructions:", err);
-        setError(err instanceof Error ? err.message : "Failed to fetch instructions");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadInstructions();
+  
+  // Get static instructions from pre-scraped data
+  const instructions: LaunchableInstructions | null = useMemo(() => {
+    if (!id) return null;
+    return getInstructions(id);
   }, [id]);
 
   const copyCommand = async (command: string, index: number) => {
@@ -261,7 +244,7 @@ echo "Deployment complete!"
               Deployment Instructions
               {instructions?.commands && (
                 <Badge variant="secondary" className="ml-2">
-                  {instructions.commands.length} commands
+                  {instructions.commands.length} steps
                 </Badge>
               )}
             </CardTitle>
@@ -279,61 +262,73 @@ echo "Deployment complete!"
             )}
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-              <div className="space-y-4">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="space-y-2">
-                    <Skeleton className="h-4 w-24" />
-                    <Skeleton className="h-16 w-full" />
+            {instructions?.commands && instructions.commands.length > 0 ? (
+              <div className="space-y-6">
+                {/* Overview from instructions */}
+                {instructions.overview && (
+                  <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/50 border border-border">
+                    <Info className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+                    <p className="text-sm text-muted-foreground">{instructions.overview}</p>
                   </div>
-                ))}
-              </div>
-            ) : error ? (
-              <div className="flex flex-col items-center justify-center py-8 gap-4">
-                <AlertTriangle className="h-12 w-12 text-destructive" />
-                <div className="text-center">
-                  <p className="font-medium text-destructive">Failed to load instructions</p>
-                  <p className="text-sm text-muted-foreground mt-1">{error}</p>
-                </div>
-                <Button 
-                  variant="outline" 
-                  onClick={() => window.location.reload()}
-                >
-                  Try Again
-                </Button>
-              </div>
-            ) : instructions?.commands && instructions.commands.length > 0 ? (
-              <ScrollArea className="h-[500px] pr-4">
-                <div className="space-y-4">
-                  {instructions.commands.map((command, index) => (
-                    <div key={index} className="group">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs text-muted-foreground font-mono">
-                          Step {index + 1}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity h-7"
-                          onClick={() => copyCommand(command, index)}
-                        >
-                          {copiedIndex === index ? (
-                            <Check className="h-3 w-3 text-green-500" />
-                          ) : (
-                            <Copy className="h-3 w-3" />
-                          )}
-                        </Button>
+                )}
+                
+                {/* Prerequisites */}
+                {instructions.prerequisites && instructions.prerequisites.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium text-muted-foreground">Prerequisites</h4>
+                    <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
+                      {instructions.prerequisites.map((prereq, i) => (
+                        <li key={i}>{prereq}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                
+                {/* Commands */}
+                <ScrollArea className="h-[500px] pr-4">
+                  <div className="space-y-4">
+                    {instructions.commands.map((command, index) => (
+                      <div key={index} className="group">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs text-muted-foreground font-mono">
+                            Step {index + 1}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="opacity-0 group-hover:opacity-100 transition-opacity h-7"
+                            onClick={() => copyCommand(command, index)}
+                          >
+                            {copiedIndex === index ? (
+                              <Check className="h-3 w-3 text-green-500" />
+                            ) : (
+                              <Copy className="h-3 w-3" />
+                            )}
+                          </Button>
+                        </div>
+                        <div className="border border-border rounded-lg overflow-hidden">
+                          <CodeBlock code={command} language="bash" />
+                        </div>
                       </div>
-                      <div className="border border-border rounded-lg overflow-hidden">
-                        <CodeBlock code={command} language="bash" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
+                    ))}
+                  </div>
+                </ScrollArea>
+                
+                {/* Notes */}
+                {instructions.notes && instructions.notes.length > 0 && (
+                  <div className="space-y-2 pt-4 border-t border-border">
+                    <h4 className="text-sm font-medium text-muted-foreground">Notes</h4>
+                    <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
+                      {instructions.notes.map((note, i) => (
+                        <li key={i}>{note}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-8 gap-4">
-                <p className="text-muted-foreground">No commands found for this launchable.</p>
+                <p className="text-muted-foreground">Instructions coming soon for this launchable.</p>
                 <Button asChild variant="outline">
                   <a href={launchable.url} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="h-4 w-4 mr-2" />
