@@ -15,10 +15,11 @@ import {
   Check,
   Key,
   AlertTriangle,
-  Rocket
+  Rocket,
+  Terminal
 } from "lucide-react";
 import { launchables } from "@/data/launchables";
-import { fetchInstructions, type InstructionsResponse } from "@/lib/api";
+import { fetchInstructions, openTerminal, type InstructionsResponse } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 const LaunchableDetails = () => {
@@ -30,6 +31,7 @@ const LaunchableDetails = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [isOpeningTerminal, setIsOpeningTerminal] = useState(false);
 
   const launchable = launchables.find(l => l.id === id);
 
@@ -91,6 +93,25 @@ const LaunchableDetails = () => {
     }
   };
 
+  const handleOpenTerminal = async () => {
+    setIsOpeningTerminal(true);
+    try {
+      await openTerminal();
+      toast({
+        title: "Terminal Opened",
+        description: "A terminal window has been opened on your DGX Spark.",
+      });
+    } catch (err) {
+      toast({
+        title: "Failed to open terminal",
+        description: err instanceof Error ? err.message : "Could not open terminal",
+        variant: "destructive",
+      });
+    } finally {
+      setIsOpeningTerminal(false);
+    }
+  };
+
   if (!launchable) {
     return (
       <Layout>
@@ -139,12 +160,22 @@ const LaunchableDetails = () => {
             </div>
             <h1 className="text-2xl font-bold">{launchable.title}</h1>
           </div>
-          <Button asChild className="nvidia-gradient nvidia-glow">
-            <a href={launchable.url} target="_blank" rel="noopener noreferrer">
-              <ExternalLink className="h-4 w-4 mr-2" />
-              View on NVIDIA
-            </a>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              onClick={handleOpenTerminal}
+              disabled={isOpeningTerminal}
+            >
+              <Terminal className="h-4 w-4 mr-2" />
+              {isOpeningTerminal ? "Opening..." : "Open Terminal"}
+            </Button>
+            <Button asChild className="nvidia-gradient nvidia-glow">
+              <a href={launchable.url} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-4 w-4 mr-2" />
+                View on NVIDIA
+              </a>
+            </Button>
+          </div>
         </div>
 
         {/* Overview Card */}
