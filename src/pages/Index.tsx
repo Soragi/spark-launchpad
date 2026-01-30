@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const Index = () => {
-  const { stats, memoryHistory, gpuHistory, isLoading, error } = useSystemStats();
+  const { stats, memoryHistory, gpuHistory, isLoading, error } = useSystemStats({ pollingInterval: 1000 });
   const [jupyterStatus, setJupyterStatus] = useState<"running" | "stopped">("stopped");
   const [jupyterLoading, setJupyterLoading] = useState(false);
   const { toast } = useToast();
