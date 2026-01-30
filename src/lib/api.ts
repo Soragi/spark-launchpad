@@ -130,11 +130,27 @@ export async function manageJupyterLab(action: 'start' | 'stop' | 'restart'): Pr
   return response.json();
 }
 
-// Health check
+// Health check - verifies backend is responding with valid JSON
 export async function checkApiHealth(): Promise<boolean> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/health`);
-    return response.ok;
+    const response = await fetch(`${API_BASE_URL}/api/health`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+    
+    if (!response.ok) return false;
+    
+    // Verify it's actually JSON from the backend, not HTML from Vite/nginx fallback
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      return false;
+    }
+    
+    // Parse to ensure valid JSON response
+    const data = await response.json();
+    return data && data.status === 'healthy';
   } catch {
     return false;
   }
