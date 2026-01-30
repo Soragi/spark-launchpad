@@ -390,8 +390,18 @@ async def run_auto_deploy(job_id: str, commands: List[str], ngc_api_key: Optiona
         job["completed_at"] = datetime.now().isoformat()
 
 
+def safe_float(value: str, default: float = 0.0) -> float:
+    """Safely convert a string to float, handling [N/A] and other non-numeric values"""
+    if not value or value.strip() in ('[N/A]', 'N/A', '[Not Supported]', 'Not Supported', ''):
+        return default
+    try:
+        return float(value.strip())
+    except (ValueError, TypeError):
+        return default
+
+
 def run_nvidia_smi() -> dict:
-    """Run nvidia-smi and parse JSON output"""
+    """Run nvidia-smi and parse output, handling [N/A] values gracefully"""
     try:
         result = subprocess.run(
             [
@@ -410,19 +420,18 @@ def run_nvidia_smi() -> dict:
         if lines:
             parts = [p.strip() for p in lines[0].split(",")]
             return {
-                "gpu_name": parts[0],
-                "gpu_memory_used": float(parts[1]),
-                "gpu_memory_total": float(parts[2]),
-                "gpu_utilization": float(parts[3]),
-                "gpu_temperature": float(parts[4]),
-                "driver_version": parts[5],
+                "gpu_name": parts[0] if parts[0] and parts[0] not in ('[N/A]', 'N/A') else "NVIDIA GPU",
+                "gpu_memory_used": safe_float(parts[1], 0.0),
+                "gpu_memory_total": safe_float(parts[2], 128.0),
+                "gpu_utilization": safe_float(parts[3], 0.0),
+                "gpu_temperature": safe_float(parts[4], 40.0),
+                "driver_version": parts[5] if len(parts) > 5 and parts[5] not in ('[N/A]', 'N/A') else "Unknown",
             }
     except FileNotFoundError:
         # nvidia-smi not available, return simulated data for development
-        # Add variation to make it clear this is simulated
-        base_gpu_util = random.uniform(0, 5)  # Idle GPU shows near 0%
-        base_mem_used = random.uniform(0.5, 2.0)  # Minimal memory usage
-        base_temp = random.uniform(35, 42)  # Cool idle temperature
+        base_gpu_util = random.uniform(0, 5)
+        base_mem_used = random.uniform(0.5, 2.0)
+        base_temp = random.uniform(35, 42)
         
         return {
             "gpu_name": "Simulated GPU (Development Mode)",
