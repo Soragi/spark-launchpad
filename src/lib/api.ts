@@ -60,11 +60,21 @@ export interface AutoDeployRequest {
 
 // Fetch system stats from nvidia-smi
 export async function fetchSystemStats(): Promise<SystemStats> {
-  const response = await fetch(`${API_BASE_URL}/api/system/stats`);
+  const url = `${API_BASE_URL}/api/system/stats`;
+  console.log('[API] Fetching system stats from:', url);
+  
+  const response = await fetch(url);
+  console.log('[API] System stats response:', response.status, response.headers.get('content-type'));
+  
   if (!response.ok) {
+    const text = await response.text();
+    console.error('[API] System stats error:', text.substring(0, 200));
     throw new Error(`Failed to fetch system stats: ${response.statusText}`);
   }
-  return response.json();
+  
+  const data = await response.json();
+  console.log('[API] System stats data:', data);
+  return data;
 }
 
 // List all deployments
