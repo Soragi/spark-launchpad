@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Progress } from "@/components/ui/progress";
 import { useDeployments } from "@/hooks/use-deployments";
 import { useContainerLogs } from "@/hooks/use-container-logs";
 import { useSavedLaunchables } from "@/hooks/use-saved-launchables";
+import { useAutoDeploy } from "@/hooks/use-auto-deploy";
 import { getContainerLogs } from "@/lib/api";
 import {
   Container,
@@ -23,6 +26,9 @@ import {
   Loader2,
   Trash2,
   Rocket,
+  AlertCircle,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 import {
   Dialog,
@@ -30,6 +36,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
 
 interface LogViewerProps {
   containerId: string;
@@ -106,14 +113,135 @@ const LogViewer = ({ containerId, containerName, onClose }: LogViewerProps) => {
   );
 };
 
+interface DeploymentLogViewerProps {
+  logs: string[];
+  status: string;
+  currentStep: number;
+  totalSteps: number;
+  error?: string | null;
+  onClose: () => void;
+}
+
+const DeploymentLogViewer = ({
+  logs,
+  status,
+  currentStep,
+  totalSteps,
+  error,
+  onClose,
+}: DeploymentLogViewerProps) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [logs]);
+
+  const progress = totalSteps > 0 ? (currentStep / totalSteps) * 100 : 0;
+
+  const statusIcon = {
+    pending: <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />,
+    running: <Loader2 className="h-4 w-4 animate-spin text-primary" />,
+    completed: <CheckCircle className="h-4 w-4 text-status-running" />,
+    failed: <XCircle className="h-4 w-4 text-destructive" />,
+    dry_run: <AlertCircle className="h-4 w-4 text-yellow-500" />,
+  }[status] || <AlertCircle className="h-4 w-4" />;
+
+  return (
+    <DialogContent className="max-w-4xl h-[600px] flex flex-col bg-card border-border">
+      <DialogHeader className="flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <DialogTitle className="flex items-center gap-2">
+            <Rocket className="h-5 w-5 text-primary" />
+            Deployment Progress
+          </DialogTitle>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="flex items-center gap-1">
+              {statusIcon}
+              {status}
+            </Badge>
+          </div>
+        </div>
+      </DialogHeader>
+
+      {/* Progress bar */}
+      <div className="space-y-2">
+        <div className="flex justify-between text-sm text-muted-foreground">
+          <span>Step {currentStep} of {totalSteps}</span>
+          <span>{Math.round(progress)}%</span>
+        </div>
+        <Progress value={progress} className="h-2" />
+      </div>
+
+      {error && (
+        <div className="px-4 py-2 bg-destructive/10 text-destructive text-sm rounded border border-destructive/30">
+          <strong>Error:</strong> {error}
+        </div>
+      )}
+
+      <ScrollArea className="flex-1 bg-secondary rounded-lg p-4">
+        <div ref={scrollRef} className="font-mono text-xs space-y-1">
+          {logs.length === 0 ? (
+            <div className="text-muted-foreground">Waiting for deployment to start...</div>
+          ) : (
+            logs.map((log, index) => (
+              <div
+                key={index}
+                className={`${
+                  log.startsWith("ERROR") ? "text-destructive" : 
+                  log.startsWith("$") ? "text-primary" :
+                  log.startsWith("---") ? "text-muted-foreground font-bold mt-2" :
+                  log.startsWith("✓") ? "text-status-running" :
+                  "text-foreground"
+                }`}
+              >
+                {log}
+              </div>
+            ))
+          )}
+        </div>
+      </ScrollArea>
+    </DialogContent>
+  );
+};
+
 const Deployments = () => {
+  const navigate = useNavigate();
   const { deployments, isLoading, stop, refetch } = useDeployments();
   const { savedLaunchables, removeLaunchable } = useSavedLaunchables();
+  const { toast } = useToast();
   const [selectedContainer, setSelectedContainer] = useState<{
     id: string;
     name: string;
   } | null>(null);
   const [stoppingId, setStoppingId] = useState<string | null>(null);
+  const [showDeploymentLogs, setShowDeploymentLogs] = useState(false);
+  const [deployingId, setDeployingId] = useState<string | null>(null);
+
+  const {
+    deploy,
+    job,
+    logs: deployLogs,
+    isDeploying,
+    error: deployError,
+    reset: resetDeploy,
+  } = useAutoDeploy({
+    onComplete: (completedJob) => {
+      toast({
+        title: "Deployment Complete",
+        description: `${completedJob.launchable_id} has been deployed successfully!`,
+      });
+      refetch();
+    },
+    onError: (error) => {
+      toast({
+        title: "Deployment Failed",
+        description: error,
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleStop = async (id: string) => {
     setStoppingId(id);
@@ -122,6 +250,27 @@ const Deployments = () => {
     } finally {
       setStoppingId(null);
     }
+  };
+
+  const handleDeploy = async (launchableId: string, requiresApiKey?: boolean) => {
+    // Check for API keys if required
+    if (requiresApiKey) {
+      const hfKey = localStorage.getItem('hf_api_key');
+      if (!hfKey) {
+        toast({
+          title: "API Key Required",
+          description: "Please configure your HuggingFace API key in Settings first.",
+          variant: "destructive",
+        });
+        navigate('/settings');
+        return;
+      }
+    }
+
+    setDeployingId(launchableId);
+    setShowDeploymentLogs(true);
+    await deploy(launchableId);
+    setDeployingId(null);
   };
 
   const getPortUrl = (ports: Record<string, string> | undefined) => {
@@ -188,11 +337,23 @@ const Deployments = () => {
                       <Button
                         size="sm"
                         className="flex-1 nvidia-gradient nvidia-glow"
+                        onClick={() => handleDeploy(launchable.id, launchable.requiresApiKey)}
+                        disabled={isDeploying && deployingId === launchable.id}
+                      >
+                        {isDeploying && deployingId === launchable.id ? (
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        ) : (
+                          <Rocket className="h-4 w-4 mr-1" />
+                        )}
+                        Deploy
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
                         asChild
                       >
                         <a href={launchable.url} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink className="h-4 w-4 mr-1" />
-                          View Blueprint
+                          <ExternalLink className="h-4 w-4" />
                         </a>
                       </Button>
                       <Button
@@ -381,7 +542,7 @@ const Deployments = () => {
         )}
       </div>
 
-      {/* Log Viewer Dialog */}
+      {/* Container Log Viewer Dialog */}
       <Dialog
         open={!!selectedContainer}
         onOpenChange={() => setSelectedContainer(null)}
@@ -393,6 +554,29 @@ const Deployments = () => {
             onClose={() => setSelectedContainer(null)}
           />
         )}
+      </Dialog>
+
+      {/* Deployment Log Viewer Dialog */}
+      <Dialog
+        open={showDeploymentLogs}
+        onOpenChange={(open) => {
+          if (!open && !isDeploying) {
+            setShowDeploymentLogs(false);
+            resetDeploy();
+          }
+        }}
+      >
+        <DeploymentLogViewer
+          logs={deployLogs}
+          status={job?.status || 'pending'}
+          currentStep={job?.current_step || 0}
+          totalSteps={job?.total_steps || 0}
+          error={deployError}
+          onClose={() => {
+            setShowDeploymentLogs(false);
+            resetDeploy();
+          }}
+        />
       </Dialog>
     </Layout>
   );

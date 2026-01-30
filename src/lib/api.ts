@@ -32,6 +32,32 @@ export interface DeploymentRequest {
   hf_api_key?: string;
 }
 
+export interface DeploymentJob {
+  id: string;
+  launchable_id: string;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'dry_run';
+  commands: string[];
+  current_step: number;
+  total_steps: number;
+  logs: string[];
+  started_at?: string;
+  completed_at?: string;
+  error?: string;
+}
+
+export interface InstructionsResponse {
+  launchable_id: string;
+  commands: string[];
+  raw_html?: string;
+}
+
+export interface AutoDeployRequest {
+  launchable_id: string;
+  ngc_api_key?: string;
+  hf_api_key?: string;
+  dry_run?: boolean;
+}
+
 // Fetch system stats from nvidia-smi
 export async function fetchSystemStats(): Promise<SystemStats> {
   const response = await fetch(`${API_BASE_URL}/api/system/stats`);
@@ -127,6 +153,61 @@ export async function getContainerLogs(launchableId: string, tail = 100): Promis
 // WebSocket URL for log streaming
 export function getLogsWebSocketUrl(launchableId: string): string {
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsHost = API_BASE_URL.replace(/^https?:\/\//, '');
+  const wsHost = API_BASE_URL.replace(/^https?:\/\//, '') || window.location.host;
   return `${wsProtocol}//${wsHost}/ws/logs/${launchableId}`;
+}
+
+// ============ Auto-Deploy API ============
+
+// Fetch installation instructions from NVIDIA
+export async function fetchInstructions(launchableId: string): Promise<InstructionsResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/launchables/${launchableId}/instructions`);
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || `Failed to fetch instructions for ${launchableId}`);
+  }
+  return response.json();
+}
+
+// Start automated deployment
+export async function startAutoDeploy(request: AutoDeployRequest): Promise<DeploymentJob> {
+  const response = await fetch(`${API_BASE_URL}/api/launchables/${request.launchable_id}/auto-deploy`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || `Failed to start auto-deploy for ${request.launchable_id}`);
+  }
+  return response.json();
+}
+
+// Get deployment job status
+export async function getDeploymentJob(jobId: string): Promise<DeploymentJob> {
+  const response = await fetch(`${API_BASE_URL}/api/deployments/jobs/${jobId}`);
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || `Failed to get job ${jobId}`);
+  }
+  return response.json();
+}
+
+// List all deployment jobs
+export async function listDeploymentJobs(): Promise<DeploymentJob[]> {
+  const response = await fetch(`${API_BASE_URL}/api/deployments/jobs`);
+  if (!response.ok) {
+    throw new Error(`Failed to list deployment jobs: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+// WebSocket URL for job log streaming
+export function getJobLogsWebSocketUrl(jobId: string): string {
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsHost = API_BASE_URL.replace(/^https?:\/\//, '') || window.location.host;
+  return `${wsProtocol}//${wsHost}/ws/jobs/${jobId}`;
 }
