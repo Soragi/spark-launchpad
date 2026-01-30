@@ -16,7 +16,8 @@ import {
   Key,
   AlertTriangle,
   Rocket,
-  Terminal
+  Terminal,
+  FileCode
 } from "lucide-react";
 import { launchables } from "@/data/launchables";
 import { fetchInstructions, openTerminal, type InstructionsResponse } from "@/lib/api";
@@ -83,6 +84,45 @@ const LaunchableDetails = () => {
       toast({
         title: "All commands copied!",
         description: `${instructions.commands.length} commands copied to clipboard`,
+      });
+    } catch (err) {
+      toast({
+        title: "Failed to copy",
+        description: "Could not copy to clipboard",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const copyAsScript = async () => {
+    if (!instructions?.commands.length || !launchable) return;
+    
+    const scriptContent = `#!/usr/bin/env bash
+
+# =============================================================================
+# ${launchable.title}
+# =============================================================================
+# Generated from DGX Spark Launchpad
+# ${launchable.description}
+# =============================================================================
+
+set -euo pipefail
+
+echo "Starting deployment: ${launchable.title}"
+echo "============================================="
+
+${instructions.commands.map((cmd, i) => `# Step ${i + 1}\necho "Running step ${i + 1}..."\n${cmd}`).join('\n\n')}
+
+echo ""
+echo "============================================="
+echo "Deployment complete!"
+`;
+    
+    try {
+      await navigator.clipboard.writeText(scriptContent);
+      toast({
+        title: "Script copied!",
+        description: "Shell script copied to clipboard. Save as .sh file and run with bash.",
       });
     } catch (err) {
       toast({
@@ -226,10 +266,16 @@ const LaunchableDetails = () => {
               )}
             </CardTitle>
             {instructions?.commands && instructions.commands.length > 0 && (
-              <Button variant="outline" size="sm" onClick={copyAllCommands}>
-                <Copy className="h-4 w-4 mr-2" />
-                Copy All
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={copyAsScript}>
+                  <FileCode className="h-4 w-4 mr-2" />
+                  Copy as Script
+                </Button>
+                <Button variant="outline" size="sm" onClick={copyAllCommands}>
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy All
+                </Button>
+              </div>
             )}
           </CardHeader>
           <CardContent>
