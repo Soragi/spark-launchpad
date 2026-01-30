@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import CodeBlock from "@/components/code/CodeBlock";
 import { 
   ArrowLeft, 
   Clock, 
@@ -246,11 +247,9 @@ const LaunchableDetails = () => {
                           )}
                         </Button>
                       </div>
-                      <pre className="bg-secondary/50 border border-border rounded-lg p-4 overflow-x-auto">
-                        <code className="text-sm font-mono text-foreground whitespace-pre-wrap break-all">
-                          {command}
-                        </code>
-                      </pre>
+                      <div className="border border-border rounded-lg overflow-hidden">
+                        <CodeBlock code={command} language="bash" />
+                      </div>
                     </div>
                   ))}
                 </div>
