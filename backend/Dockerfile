@@ -1,12 +1,17 @@
 # Backend Dockerfile for DGX Spark API
-FROM python:3.11-slim
+# Use NVIDIA CUDA base image to ensure nvidia-smi is available
+FROM nvidia/cuda:12.4.1-base-ubuntu22.04
 
 WORKDIR /app
 
-# Install system dependencies
+# Install Python and system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 \
+    python3.11-venv \
+    python3-pip \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3.11 /usr/bin/python
 
 # Copy requirements first for caching
 COPY requirements.txt .
