@@ -196,6 +196,20 @@ def is_command_allowed(command: str) -> bool:
     return False
 
 
+def normalize_command(text: str) -> str:
+    """Normalize a command by fixing common extraction issues"""
+    # Replace multiple spaces/tabs with single space
+    text = re.sub(r'[ \t]+', ' ', text)
+    # Fix common issues where flags get concatenated (e.g., "main.py--listen" -> "main.py --listen")
+    text = re.sub(r'(\w)(--)', r'\1 \2', text)
+    text = re.sub(r'(\w)(-[a-zA-Z])', r'\1 \2', text)
+    # Fix issues where values get concatenated to flags (e.g., "--listen0.0.0.0" -> "--listen 0.0.0.0")
+    text = re.sub(r'(--\w+)(\d)', r'\1 \2', text)
+    text = re.sub(r'(--\w+)([/~\.])', r'\1 \2', text)
+    # Strip leading/trailing whitespace
+    return text.strip()
+
+
 def extract_commands_from_html(html_content: str) -> List[str]:
     """Extract shell commands from HTML content"""
     soup = BeautifulSoup(html_content, 'html.parser')
@@ -204,18 +218,19 @@ def extract_commands_from_html(html_content: str) -> List[str]:
     # Find code blocks - common patterns in documentation pages
     # Pattern 1: <pre><code> blocks
     for pre in soup.find_all('pre'):
-        code = pre.get_text(strip=True)
+        # Use separator=' ' to preserve whitespace between elements
+        code = pre.get_text(separator=' ')
         if code:
             # Split by newlines and filter empty lines
             for line in code.split('\n'):
-                line = line.strip()
+                line = normalize_command(line)
                 # Skip comments and empty lines
                 if line and not line.startswith('#') and is_command_allowed(line):
                     commands.append(line)
     
     # Pattern 2: code elements with specific classes
     for code in soup.find_all('code', class_=re.compile(r'(bash|shell|sh|language-bash|language-shell)')):
-        text = code.get_text(strip=True)
+        text = normalize_command(code.get_text(separator=' '))
         if text and is_command_allowed(text):
             commands.append(text)
     
@@ -223,7 +238,7 @@ def extract_commands_from_html(html_content: str) -> List[str]:
     for div in soup.find_all(['div', 'span'], class_=re.compile(r'(copy|code|command)')):
         code_elem = div.find('code') or div.find('pre')
         if code_elem:
-            text = code_elem.get_text(strip=True)
+            text = normalize_command(code_elem.get_text(separator=' '))
             if text and is_command_allowed(text):
                 commands.append(text)
     
