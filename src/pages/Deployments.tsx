@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useDeployments } from "@/hooks/use-deployments";
 import { useContainerLogs } from "@/hooks/use-container-logs";
+import { useSavedLaunchables } from "@/hooks/use-saved-launchables";
 import { getContainerLogs } from "@/lib/api";
 import {
   Container,
@@ -20,6 +21,8 @@ import {
   WifiOff,
   X,
   Loader2,
+  Trash2,
+  Rocket,
 } from "lucide-react";
 import {
   Dialog,
@@ -105,6 +108,7 @@ const LogViewer = ({ containerId, containerName, onClose }: LogViewerProps) => {
 
 const Deployments = () => {
   const { deployments, isLoading, stop, refetch } = useDeployments();
+  const { savedLaunchables, removeLaunchable } = useSavedLaunchables();
   const [selectedContainer, setSelectedContainer] = useState<{
     id: string;
     name: string;
@@ -152,17 +156,73 @@ const Deployments = () => {
           </Button>
         </div>
 
+        {/* Saved Launchables Section */}
+        {savedLaunchables.length > 0 && (
+          <div>
+            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <Rocket className="h-5 w-5 text-primary" />
+              Saved Launchables ({savedLaunchables.length})
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {savedLaunchables.map((launchable) => (
+                <Card
+                  key={launchable.id}
+                  className="bg-card border-border hover:border-primary/50 transition-colors"
+                >
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg font-medium">
+                        {launchable.title}
+                      </CardTitle>
+                      <Badge variant="secondary" className="bg-primary/20 text-primary border-0">
+                        <Clock className="h-3 w-3 mr-1" />
+                        {launchable.duration}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground line-clamp-2">
+                      {launchable.description}
+                    </p>
+                    <div className="flex gap-2 pt-2 border-t border-border">
+                      <Button
+                        size="sm"
+                        className="flex-1 nvidia-gradient nvidia-glow"
+                        asChild
+                      >
+                        <a href={launchable.url} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="h-4 w-4 mr-1" />
+                          View Blueprint
+                        </a>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => removeLaunchable(launchable.id)}
+                        title="Remove from deployments"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Running Containers */}
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
-        ) : deployments.length === 0 ? (
+        ) : deployments.length === 0 && savedLaunchables.length === 0 ? (
           <Card className="bg-card border-border">
             <CardContent className="py-12 text-center">
               <Container className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium mb-2">No Deployments</h3>
               <p className="text-muted-foreground">
-                Deploy a launchable to see it here.
+                Add a launchable from the Launchables page to see it here.
               </p>
             </CardContent>
           </Card>

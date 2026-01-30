@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, ExternalLink } from "lucide-react";
+import { Clock, ExternalLink, Plus, Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export interface Launchable {
@@ -15,9 +15,11 @@ export interface Launchable {
 
 interface LaunchableCardProps {
   launchable: Launchable;
+  onAddToDeployments?: (launchable: Launchable) => void;
+  isSaved?: boolean;
 }
 
-const LaunchableCard = ({ launchable }: LaunchableCardProps) => {
+const LaunchableCard = ({ launchable, onAddToDeployments, isSaved = false }: LaunchableCardProps) => {
   return (
     <Card className="bg-card border-border card-hover group overflow-hidden">
       <CardContent className="p-5 h-full flex flex-col">
@@ -50,16 +52,33 @@ const LaunchableCard = ({ launchable }: LaunchableCardProps) => {
             <Clock className="h-3 w-3" />
             <span>{launchable.duration}</span>
           </div>
-          <Button
-            size="sm"
-            asChild
-            className="nvidia-gradient nvidia-glow"
-          >
-            <a href={launchable.url} target="_blank" rel="noopener noreferrer">
-              <ExternalLink className="h-4 w-4 mr-1" />
-              View Blueprint
-            </a>
-          </Button>
+          <div className="flex items-center gap-2">
+            {onAddToDeployments && (
+              <Button
+                size="sm"
+                variant={isSaved ? "secondary" : "outline"}
+                onClick={() => onAddToDeployments(launchable)}
+                disabled={isSaved}
+                title={isSaved ? "Already added to deployments" : "Add to deployments"}
+              >
+                {isSaved ? (
+                  <Check className="h-4 w-4" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+              </Button>
+            )}
+            <Button
+              size="sm"
+              asChild
+              className="nvidia-gradient nvidia-glow"
+            >
+              <a href={launchable.url} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-4 w-4 mr-1" />
+                View Blueprint
+              </a>
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>
