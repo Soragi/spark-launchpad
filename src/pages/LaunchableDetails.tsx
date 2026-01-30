@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { launchables } from "@/data/launchables";
 import { getInstructions, type LaunchableInstructions } from "@/data/launchableInstructions";
-
+import { copyToClipboard } from "@/lib/clipboard";
 import { useToast } from "@/hooks/use-toast";
 
 interface ApiKeys {
@@ -85,9 +85,10 @@ const LaunchableDetails = () => {
   }, [instructions]);
 
   const copyCommand = async (command: string, index: number) => {
-    try {
-      const substitutedCommand = substituteApiKeys(command);
-      await navigator.clipboard.writeText(substitutedCommand);
+    const substitutedCommand = substituteApiKeys(command);
+    const success = await copyToClipboard(substitutedCommand);
+    
+    if (success) {
       setCopiedIndex(index);
       toast({
         title: "Copied!",
@@ -96,10 +97,10 @@ const LaunchableDetails = () => {
           : "Command copied to clipboard",
       });
       setTimeout(() => setCopiedIndex(null), 2000);
-    } catch (err) {
+    } else {
       toast({
         title: "Failed to copy",
-        description: "Could not copy to clipboard",
+        description: "Could not copy to clipboard. Try selecting the text manually.",
         variant: "destructive",
       });
     }
@@ -108,19 +109,20 @@ const LaunchableDetails = () => {
   const copyAllCommands = async () => {
     if (!allCodeBlocks.length) return;
     
-    try {
-      const allCommands = allCodeBlocks.map(substituteApiKeys).join('\n\n');
-      await navigator.clipboard.writeText(allCommands);
+    const allCommands = allCodeBlocks.map(substituteApiKeys).join('\n\n');
+    const success = await copyToClipboard(allCommands);
+    
+    if (success) {
       toast({
         title: "All commands copied!",
         description: apiKeys.ngcApiKey || apiKeys.hfToken 
           ? `${allCodeBlocks.length} commands copied with your API keys` 
           : `${allCodeBlocks.length} commands copied to clipboard`,
       });
-    } catch (err) {
+    } else {
       toast({
         title: "Failed to copy",
-        description: "Could not copy to clipboard",
+        description: "Could not copy to clipboard. Try selecting the text manually.",
         variant: "destructive",
       });
     }
@@ -128,8 +130,6 @@ const LaunchableDetails = () => {
 
   const copyAsScript = async () => {
     if (!allCodeBlocks.length || !launchable || !instructions) return;
-    
-    const substitutedCommands = allCodeBlocks.map(substituteApiKeys);
     
     const scriptContent = `#!/usr/bin/env bash
 
@@ -155,18 +155,19 @@ echo "============================================="
 echo "Deployment complete!"
 `;
     
-    try {
-      await navigator.clipboard.writeText(scriptContent);
+    const success = await copyToClipboard(scriptContent);
+    
+    if (success) {
       toast({
         title: "Script copied!",
         description: apiKeys.ngcApiKey || apiKeys.hfToken 
           ? "Shell script copied with your API keys. Save as .sh file and run with bash." 
           : "Shell script copied to clipboard. Save as .sh file and run with bash.",
       });
-    } catch (err) {
+    } else {
       toast({
         title: "Failed to copy",
-        description: "Could not copy to clipboard",
+        description: "Could not copy to clipboard. Try selecting the text manually.",
         variant: "destructive",
       });
     }
@@ -175,14 +176,15 @@ echo "Deployment complete!"
   const handleOpenTerminal = async () => {
     // Copy commands and show instructions for opening terminal manually
     if (allCodeBlocks.length > 0) {
-      try {
-        const allCommands = allCodeBlocks.map(substituteApiKeys).join('\n\n');
-        await navigator.clipboard.writeText(allCommands);
+      const allCommands = allCodeBlocks.map(substituteApiKeys).join('\n\n');
+      const success = await copyToClipboard(allCommands);
+      
+      if (success) {
         toast({
           title: "Commands copied to clipboard!",
           description: "Open a terminal on your DGX Spark and paste the commands to run them.",
         });
-      } catch {
+      } else {
         toast({
           title: "Open Terminal on DGX Spark",
           description: "Use SSH or the desktop environment to open a terminal, then copy the commands from this page.",
