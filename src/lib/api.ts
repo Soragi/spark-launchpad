@@ -211,3 +211,33 @@ export function getJobLogsWebSocketUrl(jobId: string): string {
   const wsHost = API_BASE_URL.replace(/^https?:\/\//, '') || window.location.host;
   return `${wsProtocol}//${wsHost}/ws/jobs/${jobId}`;
 }
+
+// ============ Terminal API ============
+
+export interface TerminalRequest {
+  working_directory?: string;
+  command?: string;
+}
+
+export interface TerminalResponse {
+  success: boolean;
+  terminal: string;
+  message: string;
+}
+
+// Open a terminal on the DGX Spark host
+export async function openTerminal(request?: TerminalRequest): Promise<TerminalResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/terminal/open`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request || {}),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to open terminal');
+  }
+  return response.json();
+}

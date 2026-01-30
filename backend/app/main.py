@@ -876,3 +876,98 @@ async def websocket_job_logs(websocket: WebSocket, job_id: str):
     except Exception as e:
         await websocket.send_json({"type": "error", "message": str(e)})
         await websocket.close()
+
+
+# ============ Terminal API ============
+
+class TerminalRequest(BaseModel):
+    working_directory: Optional[str] = None
+    command: Optional[str] = None  # Optional command to run in terminal
+
+
+def find_terminal_emulator() -> tuple[str, list[str]]:
+    """Find available terminal emulator on the system"""
+    # List of terminal emulators to try, in order of preference
+    terminals = [
+        # GNOME Terminal
+        ("gnome-terminal", ["gnome-terminal", "--"]),
+        # Konsole (KDE)
+        ("konsole", ["konsole", "-e"]),
+        # XFCE Terminal
+        ("xfce4-terminal", ["xfce4-terminal", "-e"]),
+        # LXTerminal
+        ("lxterminal", ["lxterminal", "-e"]),
+        # Mate Terminal
+        ("mate-terminal", ["mate-terminal", "-e"]),
+        # Tilix
+        ("tilix", ["tilix", "-e"]),
+        # Terminator
+        ("terminator", ["terminator", "-e"]),
+        # XTerm (fallback)
+        ("xterm", ["xterm", "-e"]),
+    ]
+    
+    for name, cmd in terminals:
+        try:
+            result = subprocess.run(
+                ["which", name],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                return name, cmd
+        except Exception:
+            continue
+    
+    raise FileNotFoundError("No terminal emulator found")
+
+
+@app.post("/api/terminal/open")
+async def open_terminal(request: TerminalRequest = None):
+    """Open a terminal window on the DGX Spark host"""
+    try:
+        terminal_name, terminal_cmd = find_terminal_emulator()
+        
+        # Build the command
+        cmd = terminal_cmd.copy()
+        
+        # If a working directory is specified, cd to it first
+        if request and request.working_directory:
+            shell_cmd = f"cd {request.working_directory} && exec $SHELL"
+            if request.command:
+                shell_cmd = f"cd {request.working_directory} && {request.command}; exec $SHELL"
+            cmd.extend(["bash", "-c", shell_cmd])
+        elif request and request.command:
+            cmd.extend(["bash", "-c", f"{request.command}; exec $SHELL"])
+        
+        # Set DISPLAY for X11 forwarding if not set
+        env = os.environ.copy()
+        if "DISPLAY" not in env:
+            env["DISPLAY"] = ":0"
+        
+        # Open terminal in background (non-blocking)
+        subprocess.Popen(
+            cmd if len(cmd) > len(terminal_cmd) else terminal_cmd[:1],  # Just open terminal if no command
+            env=env,
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        
+        return {
+            "success": True,
+            "terminal": terminal_name,
+            "message": f"Opened {terminal_name} terminal"
+        }
+        
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail="No terminal emulator found on this system. Please open a terminal manually."
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to open terminal: {str(e)}"
+        )
