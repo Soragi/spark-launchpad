@@ -1,131 +1,201 @@
 
-# DGX Spark WebUI - Custom Launch Script
+
+# Automated Launchable Deployment System
 
 ## Overview
+This plan adds an automated deployment feature that fetches installation instructions from NVIDIA blueprint pages, extracts the shell commands, injects stored API keys, and executes them on the DGX Spark system when a user adds a launchable to deployments.
 
-This plan creates a standalone bash script that can be added to DGX Spark's custom scripts launcher. The script will handle:
-- Checking for Docker availability
-- Cloning or updating the WebUI repository
-- Building and starting the Docker containers
-- Providing status feedback to the user
-
-## Script Behavior
-
-The script follows the same pattern as the Live VLM WebUI example:
-- Uses `set -euo pipefail` for safety
-- Configurable via environment variables (PORT)
-- Handles cleanup on interrupt signals
-- Runs in foreground for visibility
-- Checks prerequisites before starting
-
-## Files to Create
-
-### 1. `launch-dgx-spark-webui.sh`
-
-A self-contained bash script with the following sections:
+## Architecture
 
 ```text
-+------------------------------------------+
-|  Configuration Variables                  |
-|  - PORT (default: 8080)                   |
-|  - REPO_URL                               |
-|  - INSTALL_DIR                            |
-+------------------------------------------+
-           |
-           v
-+------------------------------------------+
-|  Cleanup Handler                          |
-|  - Stop containers on exit                |
-|  - Clean shutdown                         |
-+------------------------------------------+
-           |
-           v
-+------------------------------------------+
-|  Prerequisite Checks                      |
-|  - Ensure Docker is installed             |
-|  - Ensure Docker Compose is available     |
-|  - Ensure Docker daemon is running        |
-+------------------------------------------+
-           |
-           v
-+------------------------------------------+
-|  Clone/Update Repository                  |
-|  - Clone if not exists                    |
-|  - Git pull if exists                     |
-+------------------------------------------+
-           |
-           v
-+------------------------------------------+
-|  Build and Start                          |
-|  - docker compose build                   |
-|  - docker compose up (foreground)         |
-+------------------------------------------+
++------------------+     +------------------+     +------------------+
+|    Frontend      |     |    Backend       |     |   DGX Spark      |
+|                  |     |    (FastAPI)     |     |   Host Shell     |
++------------------+     +------------------+     +------------------+
+        |                        |                        |
+        | 1. User clicks         |                        |
+        |    "Add to Deploy"     |                        |
+        |----------------------->|                        |
+        |    + API keys from     |                        |
+        |    localStorage        |                        |
+        |                        |                        |
+        |                        | 2. Fetch instructions  |
+        |                        |    from NVIDIA         |
+        |                        |    build.nvidia.com    |
+        |                        |                        |
+        |                        | 3. Parse & extract     |
+        |                        |    shell commands      |
+        |                        |                        |
+        |                        | 4. Inject API keys     |
+        |                        |    (HF_TOKEN, NGC_KEY) |
+        |                        |                        |
+        |                        | 5. Execute commands--->|
+        |                        |    via subprocess      |
+        |                        |                        |
+        | 6. Stream status/<-----|                        |
+        |    logs via WebSocket  |                        |
+        |                        |                        |
++------------------+     +------------------+     +------------------+
 ```
 
-## Script Contents
+## Implementation Plan
 
-The script will include:
+### Phase 1: Backend - Instruction Fetching & Parsing
 
-1. **Shebang and strict mode**
-   - `#!/usr/bin/env bash`
-   - `set -euo pipefail`
+**File: `backend/app/main.py`**
 
-2. **Configuration**
-   - `PORT="${PORT:-8080}"` - configurable frontend port
-   - `REPO_URL` - GitHub repository URL
-   - `INSTALL_DIR` - where to clone the repo (~/.dgx-spark-webui)
+Add new functionality to:
 
-3. **Cleanup trap**
-   - Catches INT, TERM, HUP, QUIT signals
-   - Runs `docker compose down` on exit
+1. **Fetch Instructions Endpoint**: Create a new endpoint `/api/launchables/{id}/instructions` that:
+   - Fetches the instructions page from `build.nvidia.com/spark/{id}/instructions`
+   - Parses HTML to extract code blocks (shell commands)
+   - Returns structured command list
 
-4. **Docker checks**
-   - Verify `docker` command exists
-   - Verify Docker daemon is running
-   - Verify `docker compose` is available
+2. **Automated Deploy Endpoint**: Create `/api/launchables/{id}/auto-deploy` that:
+   - Accepts API keys (NGC, HuggingFace) in the request body
+   - Fetches and parses instructions
+   - Injects environment variables for API keys into commands
+   - Executes commands sequentially via subprocess
+   - Returns execution status
 
-5. **Repository management**
-   - Clone if directory doesn't exist
-   - Pull latest changes if it does
+3. **Dependencies**: Add `beautifulsoup4` and `httpx` to `backend/requirements.txt` for HTML parsing and async HTTP requests
 
-6. **Port configuration**
-   - Modify docker-compose.yml to use custom port if specified
-
-7. **Build and run**
-   - `docker compose build` to build images
-   - `docker compose up` (without -d) to run in foreground
-
-## Technical Details
-
-### Port Handling
-The script will use `sed` to dynamically update the port mapping in docker-compose.yml if a custom port is specified:
-```bash
-sed -i "s/8080:80/${PORT}:80/" docker-compose.yml
+**Command Extraction Logic**:
+```python
+# Extract code blocks from NVIDIA instruction pages
+# Pattern: Look for ```bash or ```shell code blocks
+# Also handle inline Bash blocks with "CopiedCopy" markers
 ```
 
-### Repository URL
-Will use the GitHub repository URL (to be published). For now, a placeholder that can be updated.
+**API Key Injection**:
+- Commands containing `docker run` will have `-e HF_TOKEN=xxx -e NGC_API_KEY=xxx` added
+- Support for `export HF_TOKEN=...` style commands
 
-### Foreground Execution
-Like the example script, uses `exec docker compose up` to replace the shell process, ensuring proper signal handling.
+### Phase 2: Frontend - Deploy Button Enhancement
 
-### Dependencies
-- Docker (with Docker Compose v2 plugin)
-- Git (for cloning/updating)
-- curl or wget (optional, for Docker install)
+**File: `src/components/launchables/LaunchableCard.tsx`**
 
-## README Update
+Modify the "Add to Deployments" button to:
+1. Show a deployment dialog with options:
+   - "Save Only" - current behavior, just bookmarks
+   - "Deploy Now" - triggers automated deployment
+2. Check if required API keys are configured
+3. Show warning if `requiresApiKey` is true but keys are missing
 
-The README.md will be updated to include instructions for using the launch script:
+**File: `src/pages/Deployments.tsx`**
 
-1. Download the script
-2. Make it executable
-3. Add to DGX Spark custom scripts
-4. Run from the launcher
+Add to the saved launchables cards:
+- "Deploy" button that triggers automated deployment
+- Deployment status indicator (pending/running/completed/failed)
+- Log viewer for deployment output
 
-## Summary of Changes
+### Phase 3: New Hook - useAutoDeploy
+
+**File: `src/hooks/use-auto-deploy.ts`**
+
+Create a hook that:
+1. Calls the backend auto-deploy endpoint
+2. Manages deployment state (idle/deploying/success/error)
+3. Retrieves API keys from localStorage and passes them securely
+4. Provides real-time feedback via polling or WebSocket
+
+### Phase 4: Backend - Execution Engine
+
+**File: `backend/app/main.py`**
+
+Add robust command execution:
+
+1. **Command Queue**: Execute commands sequentially with proper error handling
+2. **Environment Setup**: Set `HF_TOKEN` and `NGC_API_KEY` environment variables
+3. **Output Streaming**: Store stdout/stderr for frontend display
+4. **Safety Checks**:
+   - Only allow commands from trusted NVIDIA sources
+   - Validate command patterns (docker, git, wget, curl, pip)
+   - Timeout protection for long-running commands
+
+### Phase 5: Deployment Status Tracking
+
+**File: `backend/app/main.py`**
+
+Add deployment job tracking:
+- Store deployment jobs in memory (or SQLite for persistence)
+- Track status: `pending` -> `running` -> `completed` | `failed`
+- Store execution logs per job
+- New endpoint: `GET /api/deployments/{id}/job-status`
+
+## Data Models
+
+### DeploymentJob
+```python
+class DeploymentJob(BaseModel):
+    id: str
+    launchable_id: str
+    status: str  # pending, running, completed, failed
+    commands: List[str]
+    current_step: int
+    total_steps: int
+    logs: List[str]
+    started_at: Optional[datetime]
+    completed_at: Optional[datetime]
+    error: Optional[str]
+```
+
+### AutoDeployRequest
+```python
+class AutoDeployRequest(BaseModel):
+    launchable_id: str
+    ngc_api_key: Optional[str]
+    hf_api_key: Optional[str]
+    dry_run: bool = False  # Preview commands without executing
+```
+
+## File Changes Summary
 
 | File | Action | Description |
 |------|--------|-------------|
-| `launch-dgx-spark-webui.sh` | Create | Main launcher script for DGX Spark custom scripts |
-| `README.md` | Update | Add section about using the launcher script |
+| `backend/requirements.txt` | Modify | Add `beautifulsoup4`, `httpx` |
+| `backend/app/main.py` | Modify | Add instruction fetching, parsing, auto-deploy endpoints |
+| `src/hooks/use-auto-deploy.ts` | Create | New hook for automated deployment |
+| `src/components/launchables/LaunchableCard.tsx` | Modify | Add deploy option to button |
+| `src/pages/Deployments.tsx` | Modify | Add deploy button and status to saved cards |
+| `src/lib/api.ts` | Modify | Add auto-deploy API functions |
+
+## Security Considerations
+
+1. **API Key Handling**: Keys are passed in request body (HTTPS in production), never logged
+2. **Command Validation**: Only execute recognized safe commands (docker, git, pip, etc.)
+3. **Source Validation**: Only fetch instructions from `build.nvidia.com` domain
+4. **Timeout Protection**: Commands have execution timeout (configurable, default 30 minutes)
+5. **User Confirmation**: Require explicit user action to trigger deployment
+
+## User Flow
+
+1. User navigates to Launchables page
+2. User clicks "Add to Deployments" on a launchable
+3. Dialog appears with options:
+   - **Save Only**: Bookmark for later (current behavior)
+   - **Deploy Now**: Start automated deployment
+4. If "Deploy Now" and API keys required but missing → redirect to Settings
+5. Deployment starts, user redirected to Deployments page
+6. Deployment status shows progress with live log streaming
+7. On completion, container appears in "Running" section
+
+## Technical Details
+
+### Instruction Page URL Pattern
+```
+https://build.nvidia.com/spark/{launchable_id}/instructions
+```
+
+### Command Extraction Regex
+```python
+# Match code blocks in markdown/HTML
+code_block_pattern = r"```(?:bash|shell|sh)?\n([\s\S]*?)```"
+```
+
+### Environment Variable Injection
+For `docker run` commands, insert before the image name:
+```bash
+-e HF_TOKEN=${HF_TOKEN} -e NGC_API_KEY=${NGC_API_KEY}
+```
+
