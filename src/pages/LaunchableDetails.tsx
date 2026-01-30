@@ -17,7 +17,9 @@ import {
   Rocket,
   Terminal,
   FileCode,
-  Info
+  Info,
+  Lightbulb,
+  BookOpen
 } from "lucide-react";
 import { launchables } from "@/data/launchables";
 import { getInstructions, type LaunchableInstructions } from "@/data/launchableInstructions";
@@ -69,9 +71,18 @@ const LaunchableDetails = () => {
     if (apiKeys.hfToken) {
       result = result.replace(/\$HF_TOKEN/g, apiKeys.hfToken);
       result = result.replace(/\$\{HF_TOKEN\}/g, apiKeys.hfToken);
+      result = result.replace(/<your_huggingface_token>/g, apiKeys.hfToken);
     }
     return result;
   };
+
+  // Get all code blocks from steps
+  const allCodeBlocks = useMemo(() => {
+    if (!instructions?.steps) return [];
+    return instructions.steps
+      .filter(step => step.code)
+      .map(step => step.code as string);
+  }, [instructions]);
 
   const copyCommand = async (command: string, index: number) => {
     try {
@@ -95,16 +106,16 @@ const LaunchableDetails = () => {
   };
 
   const copyAllCommands = async () => {
-    if (!instructions?.commands.length) return;
+    if (!allCodeBlocks.length) return;
     
     try {
-      const allCommands = instructions.commands.map(substituteApiKeys).join('\n\n');
+      const allCommands = allCodeBlocks.map(substituteApiKeys).join('\n\n');
       await navigator.clipboard.writeText(allCommands);
       toast({
         title: "All commands copied!",
         description: apiKeys.ngcApiKey || apiKeys.hfToken 
-          ? `${instructions.commands.length} commands copied with your API keys` 
-          : `${instructions.commands.length} commands copied to clipboard`,
+          ? `${allCodeBlocks.length} commands copied with your API keys` 
+          : `${allCodeBlocks.length} commands copied to clipboard`,
       });
     } catch (err) {
       toast({
@@ -116,9 +127,9 @@ const LaunchableDetails = () => {
   };
 
   const copyAsScript = async () => {
-    if (!instructions?.commands.length || !launchable) return;
+    if (!allCodeBlocks.length || !launchable || !instructions) return;
     
-    const substitutedCommands = instructions.commands.map(substituteApiKeys);
+    const substitutedCommands = allCodeBlocks.map(substituteApiKeys);
     
     const scriptContent = `#!/usr/bin/env bash
 
@@ -134,7 +145,10 @@ set -euo pipefail
 echo "Starting deployment: ${launchable.title}"
 echo "============================================="
 
-${substitutedCommands.map((cmd, i) => `# Step ${i + 1}\necho "Running step ${i + 1}..."\n${cmd}`).join('\n\n')}
+${instructions.steps
+  .filter(step => step.code)
+  .map((step, i) => `# Step ${i + 1}: ${step.title}\necho "Step ${i + 1}: ${step.title}..."\n${substituteApiKeys(step.code as string)}`)
+  .join('\n\n')}
 
 echo ""
 echo "============================================="
@@ -252,12 +266,20 @@ echo "Deployment complete!"
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-muted-foreground">{launchable.description}</p>
+            <p className="text-muted-foreground">
+              {instructions?.overview || launchable.description}
+            </p>
             <div className="flex items-center gap-4 text-sm">
               <div className="flex items-center gap-1 text-muted-foreground">
                 <Clock className="h-4 w-4" />
                 <span>Estimated time: {launchable.duration}</span>
               </div>
+              {instructions?.steps && (
+                <div className="flex items-center gap-1 text-muted-foreground">
+                  <BookOpen className="h-4 w-4" />
+                  <span>{instructions.steps.length} steps</span>
+                </div>
+              )}
             </div>
             
             {launchable.requiresApiKey && (
@@ -284,13 +306,13 @@ echo "Deployment complete!"
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               Deployment Instructions
-              {instructions?.commands && (
+              {instructions?.steps && (
                 <Badge variant="secondary" className="ml-2">
-                  {instructions.commands.length} steps
+                  {instructions.steps.length} steps
                 </Badge>
               )}
             </CardTitle>
-            {instructions?.commands && instructions.commands.length > 0 && (
+            {allCodeBlocks.length > 0 && (
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={copyAsScript}>
                   <FileCode className="h-4 w-4 mr-2" />
@@ -304,21 +326,16 @@ echo "Deployment complete!"
             )}
           </CardHeader>
           <CardContent>
-            {instructions?.commands && instructions.commands.length > 0 ? (
+            {instructions?.steps && instructions.steps.length > 0 ? (
               <div className="space-y-6">
-                {/* Overview from instructions */}
-                {instructions.overview && (
-                  <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/50 border border-border">
-                    <Info className="h-5 w-5 text-primary mt-0.5 shrink-0" />
-                    <p className="text-sm text-muted-foreground">{instructions.overview}</p>
-                  </div>
-                )}
-                
                 {/* Prerequisites */}
                 {instructions.prerequisites && instructions.prerequisites.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-muted-foreground">Prerequisites</h4>
-                    <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
+                  <div className="space-y-2 p-4 rounded-lg bg-muted/50 border border-border">
+                    <h4 className="text-sm font-medium flex items-center gap-2">
+                      <Info className="h-4 w-4 text-primary" />
+                      Prerequisites
+                    </h4>
+                    <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-6">
                       {instructions.prerequisites.map((prereq, i) => (
                         <li key={i}>{prereq}</li>
                       ))}
@@ -326,43 +343,102 @@ echo "Deployment complete!"
                   </div>
                 )}
                 
-                {/* Commands */}
-                <ScrollArea className="h-[500px] pr-4">
-                  <div className="space-y-4">
-                    {instructions.commands.map((command, index) => (
+                {/* Steps */}
+                <ScrollArea className="h-[600px] pr-4">
+                  <div className="space-y-8">
+                    {instructions.steps.map((step, index) => (
                       <div key={index} className="group">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs text-muted-foreground font-mono">
-                            Step {index + 1}
-                          </span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="opacity-0 group-hover:opacity-100 transition-opacity h-7"
-                            onClick={() => copyCommand(command, index)}
-                          >
-                            {copiedIndex === index ? (
-                              <Check className="h-3 w-3 text-green-500" />
-                            ) : (
-                              <Copy className="h-3 w-3" />
+                        {/* Step header */}
+                        <div className="flex items-start gap-3 mb-3">
+                          <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/20 text-primary text-sm font-medium shrink-0">
+                            {index + 1}
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-medium text-foreground">{step.title}</h3>
+                            <p className="text-sm text-muted-foreground mt-1">{step.description}</p>
+                          </div>
+                        </div>
+                        
+                        {/* Code block */}
+                        {step.code && (
+                          <div className="ml-10">
+                            <div className="relative">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity h-7"
+                                onClick={() => copyCommand(step.code as string, index)}
+                              >
+                                {copiedIndex === index ? (
+                                  <Check className="h-3 w-3 text-green-500" />
+                                ) : (
+                                  <Copy className="h-3 w-3" />
+                                )}
+                              </Button>
+                              <div className="border border-border rounded-lg overflow-hidden">
+                                <CodeBlock code={step.code} language="bash" />
+                              </div>
+                            </div>
+                            
+                            {/* Note */}
+                            {step.note && (
+                              <div className="flex items-start gap-2 mt-2 text-sm text-muted-foreground">
+                                <Lightbulb className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                                <span>{step.note}</span>
+                              </div>
                             )}
-                          </Button>
-                        </div>
-                        <div className="border border-border rounded-lg overflow-hidden">
-                          <CodeBlock code={command} language="bash" />
-                        </div>
+                            
+                            {/* Warning */}
+                            {step.warning && (
+                              <div className="flex items-start gap-2 mt-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+                                <AlertTriangle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+                                <span className="text-sm text-red-400">{step.warning}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
+                        {/* Note without code */}
+                        {!step.code && step.note && (
+                          <div className="ml-10 flex items-start gap-2 text-sm text-muted-foreground">
+                            <Lightbulb className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                            <span>{step.note}</span>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
                 </ScrollArea>
                 
-                {/* Notes */}
-                {instructions.notes && instructions.notes.length > 0 && (
+                {/* Next Steps */}
+                {instructions.nextSteps && instructions.nextSteps.length > 0 && (
                   <div className="space-y-2 pt-4 border-t border-border">
-                    <h4 className="text-sm font-medium text-muted-foreground">Notes</h4>
+                    <h4 className="text-sm font-medium text-muted-foreground">Next Steps</h4>
                     <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
-                      {instructions.notes.map((note, i) => (
-                        <li key={i}>{note}</li>
+                      {instructions.nextSteps.map((nextStep, i) => (
+                        <li key={i}>{nextStep}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                
+                {/* Resources */}
+                {instructions.resources && instructions.resources.length > 0 && (
+                  <div className="space-y-2 pt-4 border-t border-border">
+                    <h4 className="text-sm font-medium text-muted-foreground">Resources</h4>
+                    <ul className="space-y-1">
+                      {instructions.resources.map((resource, i) => (
+                        <li key={i}>
+                          <a 
+                            href={resource.url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-sm text-primary hover:underline flex items-center gap-1"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            {resource.title}
+                          </a>
+                        </li>
                       ))}
                     </ul>
                   </div>
