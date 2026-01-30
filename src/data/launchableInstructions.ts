@@ -1227,6 +1227,946 @@ model = FastLanguageModel.get_peft_model(
         description: "On the primary Spark, run NCCL all-reduce tests. Follow the NCCL documentation for specific test configurations and benchmarks."
       }
     ]
+  },
+
+  "live-vlm-webui": {
+    launchable_id: "live-vlm-webui",
+    title: "Live VLM WebUI",
+    overview: "Real-time Vision Language Model interaction with webcam streaming. This playbook sets up a web interface that captures video from your webcam and processes it through a VLM for real-time visual understanding and conversation.",
+    prerequisites: [
+      "DGX Spark with GPU access",
+      "Docker with GPU support",
+      "Webcam connected to your system",
+      "HuggingFace API key (for some models)"
+    ],
+    steps: [
+      {
+        title: "Configure Docker permissions",
+        description: "Ensure your user is in the docker group for easy container management:",
+        code: `docker ps
+
+# If you see a permission denied error, add your user to the docker group
+sudo usermod -aG docker $USER
+newgrp docker`
+      },
+      {
+        title: "Clone the Live VLM repository",
+        description: "Download the Live VLM WebUI project:",
+        code: `git clone https://github.com/NVIDIA/GenerativeAIExamples.git
+cd GenerativeAIExamples/community/live-vlm-webui`
+      },
+      {
+        title: "Set up environment variables",
+        description: "Configure the necessary environment variables:",
+        code: `export HF_TOKEN=<your_huggingface_token>
+export CUDA_VISIBLE_DEVICES=0`
+      },
+      {
+        title: "Build the Docker container",
+        description: "Build the Live VLM container image:",
+        code: `docker build -t live-vlm-webui .`
+      },
+      {
+        title: "Run the container with webcam access",
+        description: "Start the container with GPU and webcam device access:",
+        code: `docker run --gpus all -it --rm \\
+  -p 7860:7860 \\
+  --device=/dev/video0:/dev/video0 \\
+  -e HF_TOKEN=$HF_TOKEN \\
+  live-vlm-webui`,
+        note: "Replace /dev/video0 with your webcam device path if different. Check available devices with 'ls /dev/video*'."
+      },
+      {
+        title: "Access the WebUI",
+        description: "Open your browser and navigate to the web interface:",
+        code: `# Open in browser:
+# http://localhost:7860`,
+        note: "Allow webcam access when prompted by the browser."
+      },
+      {
+        title: "Test the VLM",
+        description: "In the WebUI, enable your webcam stream and ask questions about what the model sees. Try prompts like 'What do you see?' or 'Describe the scene'."
+      },
+      {
+        title: "Cleanup",
+        description: "Stop and remove the container when finished:",
+        code: `# Stop the container with Ctrl+C
+# Remove the image if no longer needed
+docker rmi live-vlm-webui`
+      }
+    ],
+    nextSteps: [
+      "Experiment with different VLM models for varying capabilities",
+      "Adjust streaming resolution for performance optimization",
+      "Integrate with other applications using the API endpoints"
+    ],
+    resources: [
+      { title: "NVIDIA Generative AI Examples", url: "https://github.com/NVIDIA/GenerativeAIExamples" },
+      { title: "DGX Spark Documentation", url: "https://docs.nvidia.com/dgx/dgx-spark" }
+    ]
+  },
+
+  "isaac": {
+    launchable_id: "isaac",
+    title: "Install and Use Isaac Sim and Isaac Lab",
+    overview: "Build Isaac Sim and Isaac Lab from source for DGX Spark. Isaac Sim is NVIDIA's robotics simulation platform, and Isaac Lab provides tools for robot learning and manipulation.",
+    prerequisites: [
+      "DGX Spark with GPU access",
+      "At least 100GB available storage",
+      "Ubuntu 22.04 or later",
+      "NVIDIA Container Toolkit installed"
+    ],
+    steps: [
+      {
+        title: "Verify system requirements",
+        description: "Check GPU and driver compatibility:",
+        code: `nvidia-smi
+# Verify driver version 535 or higher
+
+# Check available storage
+df -h /`
+      },
+      {
+        title: "Pull Isaac Sim container",
+        description: "Download the Isaac Sim container from NGC:",
+        code: `docker pull nvcr.io/nvidia/isaac-sim:4.2.0`,
+        note: "This download is approximately 20GB and may take some time."
+      },
+      {
+        title: "Run Isaac Sim container",
+        description: "Launch Isaac Sim with GPU access and display forwarding:",
+        code: `xhost +local:docker
+
+docker run --gpus all -it --rm \\
+  -e DISPLAY=$DISPLAY \\
+  -v /tmp/.X11-unix:/tmp/.X11-unix \\
+  -v ~/isaac-sim-data:/root/.local/share/ov/data \\
+  --network host \\
+  nvcr.io/nvidia/isaac-sim:4.2.0`,
+        note: "Requires X11 display. For headless mode, use the --headless flag."
+      },
+      {
+        title: "Launch Isaac Sim",
+        description: "Inside the container, start Isaac Sim:",
+        code: `./isaac-sim.sh`,
+        note: "First launch will take several minutes to compile shaders and cache assets."
+      },
+      {
+        title: "Install Isaac Lab",
+        description: "Clone and install Isaac Lab for robot learning:",
+        code: `git clone https://github.com/isaac-sim/IsaacLab.git
+cd IsaacLab
+
+# Create conda environment
+conda create -n isaaclab python=3.10 -y
+conda activate isaaclab
+
+# Install Isaac Lab
+./isaaclab.sh --install`,
+        note: "Isaac Lab requires Isaac Sim to be installed first."
+      },
+      {
+        title: "Run a sample environment",
+        description: "Test Isaac Lab with a sample robot environment:",
+        code: `python source/standalone/demos/quadrupeds.py`
+      },
+      {
+        title: "Cleanup",
+        description: "Remove containers and images when finished:",
+        code: `docker rmi nvcr.io/nvidia/isaac-sim:4.2.0
+
+# Remove cached data (optional)
+rm -rf ~/isaac-sim-data`
+      }
+    ],
+    nextSteps: [
+      "Explore the Isaac Sim asset library for pre-built robots and environments",
+      "Train reinforcement learning policies with Isaac Lab",
+      "Connect to real robots using ROS 2 integration"
+    ],
+    resources: [
+      { title: "Isaac Sim Documentation", url: "https://docs.omniverse.nvidia.com/isaacsim/latest" },
+      { title: "Isaac Lab Documentation", url: "https://isaac-sim.github.io/IsaacLab/" },
+      { title: "DGX Spark Documentation", url: "https://docs.nvidia.com/dgx/dgx-spark" }
+    ]
+  },
+
+  "multi-agent-chatbot": {
+    launchable_id: "multi-agent-chatbot",
+    title: "Build and Deploy a Multi-Agent Chatbot",
+    overview: "Deploy a multi-agent chatbot system that coordinates multiple AI agents to handle complex tasks. This setup enables specialized agents to collaborate on user queries.",
+    prerequisites: [
+      "DGX Spark with GPU access",
+      "Docker with GPU support",
+      "Python 3.10+"
+    ],
+    steps: [
+      {
+        title: "Clone the multi-agent example",
+        description: "Download the NVIDIA multi-agent chatbot example:",
+        code: `git clone https://github.com/NVIDIA/GenerativeAIExamples.git
+cd GenerativeAIExamples/community/multi-agent-chatbot`
+      },
+      {
+        title: "Create virtual environment",
+        description: "Set up an isolated Python environment:",
+        code: `python3 -m venv multi-agent-env
+source multi-agent-env/bin/activate`
+      },
+      {
+        title: "Install dependencies",
+        description: "Install the required packages:",
+        code: `pip install -r requirements.txt`
+      },
+      {
+        title: "Start the Ollama backend",
+        description: "Run Ollama to serve the language models:",
+        code: `# Pull a capable model
+ollama pull llama3.1:8b
+
+# Start Ollama server
+ollama serve`
+      },
+      {
+        title: "Configure agent settings",
+        description: "Edit the configuration file to define your agents:",
+        code: `# config.yaml defines agent roles and capabilities
+# Example agents: researcher, coder, reviewer
+cat config.yaml`
+      },
+      {
+        title: "Launch the chatbot",
+        description: "Start the multi-agent chatbot interface:",
+        code: `python app.py`,
+        note: "Access the chatbot at http://localhost:7860"
+      },
+      {
+        title: "Test the agents",
+        description: "In the chat interface, try queries that require multiple agents to collaborate, such as 'Research the latest GPU architectures and write a summary'."
+      },
+      {
+        title: "Cleanup",
+        description: "Stop all services when finished:",
+        code: `# Stop the chatbot with Ctrl+C
+# Stop Ollama
+pkill ollama
+
+# Deactivate virtual environment
+deactivate`
+      }
+    ],
+    nextSteps: [
+      "Customize agent personas and capabilities in config.yaml",
+      "Add specialized agents for domain-specific tasks",
+      "Integrate with external tools and APIs"
+    ],
+    resources: [
+      { title: "NVIDIA Generative AI Examples", url: "https://github.com/NVIDIA/GenerativeAIExamples" },
+      { title: "DGX Spark Documentation", url: "https://docs.nvidia.com/dgx/dgx-spark" }
+    ]
+  },
+
+  "multi-modal-inference": {
+    launchable_id: "multi-modal-inference",
+    title: "Multi-modal Inference",
+    overview: "Set up multi-modal inference with TensorRT for processing both text and images. This enables vision-language models that can understand and generate content across modalities.",
+    prerequisites: [
+      "DGX Spark with GPU access",
+      "Docker with GPU support",
+      "At least 32GB GPU memory"
+    ],
+    steps: [
+      {
+        title: "Pull TensorRT-LLM container",
+        description: "Download the TensorRT-LLM container with multi-modal support:",
+        code: `docker pull nvcr.io/nvidia/tensorrt-llm/release:1.2.0rc6`
+      },
+      {
+        title: "Run the container",
+        description: "Launch the container with GPU access:",
+        code: `docker run --gpus all -it --rm \\
+  -p 8000:8000 \\
+  -v ~/.cache/huggingface:/root/.cache/huggingface \\
+  nvcr.io/nvidia/tensorrt-llm/release:1.2.0rc6 \\
+  bash`
+      },
+      {
+        title: "Download a multi-modal model",
+        description: "Inside the container, download a vision-language model:",
+        code: `pip install huggingface_hub
+
+huggingface-cli download llava-hf/llava-v1.6-mistral-7b-hf \\
+  --local-dir /models/llava-v1.6`
+      },
+      {
+        title: "Build the TensorRT engine",
+        description: "Convert the model to TensorRT format for optimized inference:",
+        code: `python examples/llava/build.py \\
+  --model_path /models/llava-v1.6 \\
+  --output_dir /engines/llava`,
+        note: "Engine building may take 15-30 minutes depending on model size."
+      },
+      {
+        title: "Start the inference server",
+        description: "Launch the multi-modal inference server:",
+        code: `python examples/llava/run.py \\
+  --engine_dir /engines/llava \\
+  --hf_model_dir /models/llava-v1.6 \\
+  --host 0.0.0.0 \\
+  --port 8000`
+      },
+      {
+        title: "Test with an image",
+        description: "Send a test request with an image and text prompt:",
+        code: `curl -X POST http://localhost:8000/generate \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "prompt": "Describe this image in detail",
+    "image_url": "https://example.com/image.jpg"
+  }'`
+      },
+      {
+        title: "Cleanup",
+        description: "Exit the container and remove cached data:",
+        code: `# Exit container
+exit
+
+# Remove downloaded models (optional)
+rm -rf ~/.cache/huggingface/hub/models--llava*`
+      }
+    ],
+    nextSteps: [
+      "Explore different vision-language models like LLaVA, Phi-3-Vision, or InternVL",
+      "Integrate with image processing pipelines",
+      "Benchmark throughput for production deployments"
+    ],
+    resources: [
+      { title: "TensorRT-LLM Multi-modal Examples", url: "https://nvidia.github.io/TensorRT-LLM/" },
+      { title: "DGX Spark Documentation", url: "https://docs.nvidia.com/dgx/dgx-spark" }
+    ]
+  },
+
+  "nemo-fine-tune": {
+    launchable_id: "nemo-fine-tune",
+    title: "Fine-tune with NeMo",
+    overview: "Use NVIDIA NeMo to fine-tune large language models on your DGX Spark. NeMo provides optimized training recipes and supports LoRA, P-tuning, and full fine-tuning.",
+    prerequisites: [
+      "DGX Spark with GPU access",
+      "Docker with GPU support",
+      "HuggingFace API key for gated models"
+    ],
+    steps: [
+      {
+        title: "Pull NeMo Framework container",
+        description: "Download the NeMo Framework container from NGC:",
+        code: `docker pull nvcr.io/nvidia/nemo:24.07`
+      },
+      {
+        title: "Run the NeMo container",
+        description: "Launch the container with GPU access and volume mounts:",
+        code: `docker run --gpus all -it --rm \\
+  -v ~/nemo-data:/data \\
+  -v ~/.cache/huggingface:/root/.cache/huggingface \\
+  -e HF_TOKEN=$HF_TOKEN \\
+  nvcr.io/nvidia/nemo:24.07`
+      },
+      {
+        title: "Prepare training data",
+        description: "Format your data in JSONL format for fine-tuning:",
+        code: `# Example format for instruction tuning:
+# {"input": "What is AI?", "output": "AI is..."}
+# {"input": "Explain GPUs", "output": "GPUs are..."}
+
+mkdir -p /data/training
+# Copy your training data to /data/training/train.jsonl`
+      },
+      {
+        title: "Download base model",
+        description: "Download a base model to fine-tune:",
+        code: `python -c "
+from nemo.collections.llm import Llama3Config8B
+from huggingface_hub import snapshot_download
+
+snapshot_download('meta-llama/Llama-3.1-8B',
+                  local_dir='/data/models/llama-3.1-8b')
+"`
+      },
+      {
+        title: "Configure LoRA fine-tuning",
+        description: "Create a training configuration file:",
+        code: `cat > /data/lora_config.yaml << 'EOF'
+trainer:
+  devices: 1
+  max_steps: 1000
+  val_check_interval: 100
+
+model:
+  peft:
+    peft_scheme: "lora"
+    lora_rank: 16
+    lora_alpha: 32
+
+data:
+  train_ds:
+    file_path: /data/training/train.jsonl
+    batch_size: 4
+EOF`
+      },
+      {
+        title: "Run LoRA fine-tuning",
+        description: "Start the fine-tuning process:",
+        code: `python -m nemo.collections.llm.recipes.llama3_8b_lora \\
+  --config-path=/data \\
+  --config-name=lora_config`,
+        note: "Training time depends on dataset size. Monitor GPU usage with nvidia-smi."
+      },
+      {
+        title: "Export the fine-tuned model",
+        description: "Convert the NeMo checkpoint to HuggingFace format:",
+        code: `python -m nemo.collections.llm.export \\
+  --model-path /data/checkpoints/latest \\
+  --output-path /data/models/finetuned-llama`
+      },
+      {
+        title: "Cleanup",
+        description: "Exit container and manage data:",
+        code: `exit
+
+# Remove large model files if needed
+rm -rf ~/nemo-data/models`
+      }
+    ],
+    nextSteps: [
+      "Experiment with different PEFT methods: LoRA, P-tuning, Adapter tuning",
+      "Scale training with tensor and pipeline parallelism",
+      "Deploy fine-tuned models with NIM or vLLM"
+    ],
+    resources: [
+      { title: "NeMo Framework Documentation", url: "https://docs.nvidia.com/nemo-framework/user-guide/latest/" },
+      { title: "DGX Spark Documentation", url: "https://docs.nvidia.com/dgx/dgx-spark" }
+    ]
+  },
+
+  "nvfp4-quantization": {
+    launchable_id: "nvfp4-quantization",
+    title: "NVFP4 Quantization",
+    overview: "Quantize a model to NVFP4 (4-bit floating point) using TensorRT Model Optimizer. This enables running larger models on DGX Spark by reducing memory requirements while maintaining accuracy.",
+    prerequisites: [
+      "DGX Spark with GPU access",
+      "Docker with GPU support",
+      "Python 3.10+"
+    ],
+    steps: [
+      {
+        title: "Pull TensorRT-LLM container",
+        description: "Download the container with Model Optimizer:",
+        code: `docker pull nvcr.io/nvidia/tensorrt-llm/release:1.2.0rc6`
+      },
+      {
+        title: "Run the container",
+        description: "Launch with GPU access:",
+        code: `docker run --gpus all -it --rm \\
+  -v ~/.cache/huggingface:/root/.cache/huggingface \\
+  nvcr.io/nvidia/tensorrt-llm/release:1.2.0rc6 \\
+  bash`
+      },
+      {
+        title: "Install Model Optimizer",
+        description: "Install the TensorRT Model Optimizer package:",
+        code: `pip install nvidia-modelopt`
+      },
+      {
+        title: "Download a model to quantize",
+        description: "Get a model from HuggingFace:",
+        code: `pip install huggingface_hub
+
+huggingface-cli download meta-llama/Llama-3.1-8B \\
+  --local-dir /models/llama-3.1-8b`,
+        note: "Requires HuggingFace token for gated models."
+      },
+      {
+        title: "Run NVFP4 quantization",
+        description: "Quantize the model to NVFP4 format:",
+        code: `python -m modelopt.llm.quantization.quantize_model \\
+  --model_dir /models/llama-3.1-8b \\
+  --output_dir /models/llama-3.1-8b-nvfp4 \\
+  --qformat nvfp4 \\
+  --calib_size 512`,
+        note: "Calibration uses a subset of data to determine optimal quantization parameters."
+      },
+      {
+        title: "Build TensorRT engine",
+        description: "Convert the quantized model to a TensorRT engine:",
+        code: `trtllm-build \\
+  --checkpoint_dir /models/llama-3.1-8b-nvfp4 \\
+  --output_dir /engines/llama-3.1-8b-nvfp4 \\
+  --gemm_plugin auto \\
+  --max_batch_size 4 \\
+  --max_input_len 2048 \\
+  --max_seq_len 4096`
+      },
+      {
+        title: "Test the quantized model",
+        description: "Run inference with the NVFP4 quantized engine:",
+        code: `python examples/run.py \\
+  --engine_dir /engines/llama-3.1-8b-nvfp4 \\
+  --tokenizer_dir /models/llama-3.1-8b \\
+  --input_text "What is the capital of France?"`
+      },
+      {
+        title: "Compare memory usage",
+        description: "Check GPU memory reduction:",
+        code: `nvidia-smi
+
+# NVFP4 typically uses ~75% less memory than FP16`
+      },
+      {
+        title: "Cleanup",
+        description: "Remove models and engines:",
+        code: `exit
+
+# Remove large files
+rm -rf ~/.cache/huggingface/hub/models--meta-llama*`
+      }
+    ],
+    nextSteps: [
+      "Benchmark accuracy degradation vs. FP16 baseline",
+      "Try different quantization formats: INT8, INT4, FP8",
+      "Deploy quantized models with TensorRT-LLM server"
+    ],
+    resources: [
+      { title: "TensorRT Model Optimizer Documentation", url: "https://nvidia.github.io/TensorRT-Model-Optimizer/" },
+      { title: "DGX Spark Documentation", url: "https://docs.nvidia.com/dgx/dgx-spark" }
+    ]
+  },
+
+  "rag-ai-workbench": {
+    launchable_id: "rag-ai-workbench",
+    title: "RAG Application in AI Workbench",
+    overview: "Install and use NVIDIA AI Workbench to clone and run a reproducible RAG (Retrieval-Augmented Generation) application. AI Workbench provides a desktop app for managing AI projects with built-in GPU support.",
+    prerequisites: [
+      "DGX Spark with GPU access",
+      "Docker installed",
+      "Desktop environment with browser"
+    ],
+    steps: [
+      {
+        title: "Download AI Workbench",
+        description: "Download the AI Workbench installer:",
+        code: `wget https://workbench.download.nvidia.com/stable/workbench-linux-arm64.run -O workbench-installer.run
+chmod +x workbench-installer.run`
+      },
+      {
+        title: "Install AI Workbench",
+        description: "Run the installer:",
+        code: `./workbench-installer.run`,
+        note: "Follow the installation prompts. This installs the AI Workbench desktop application."
+      },
+      {
+        title: "Launch AI Workbench",
+        description: "Start the AI Workbench application:",
+        code: `# Launch from applications menu or run:
+nvwb`
+      },
+      {
+        title: "Clone the RAG example project",
+        description: "In AI Workbench, click 'Clone Project' and enter the RAG example URL:",
+        code: `# Project URL:
+https://github.com/NVIDIA/workbench-example-hybrid-rag`
+      },
+      {
+        title: "Start the project environment",
+        description: "In the project view, click 'Start Environment'. AI Workbench will build the container and set up dependencies automatically.",
+        note: "First build may take 10-15 minutes."
+      },
+      {
+        title: "Launch JupyterLab",
+        description: "Click 'Open JupyterLab' to access the RAG notebooks and follow the included tutorials."
+      },
+      {
+        title: "Run the RAG application",
+        description: "In JupyterLab, open the main notebook and follow the steps to ingest documents and query the RAG system."
+      },
+      {
+        title: "Cleanup",
+        description: "Stop the environment when finished:",
+        code: `# In AI Workbench, click 'Stop Environment'
+# Or uninstall AI Workbench:
+nvwb uninstall`
+      }
+    ],
+    nextSteps: [
+      "Customize the RAG application with your own documents",
+      "Explore other AI Workbench example projects",
+      "Create your own reproducible AI projects"
+    ],
+    resources: [
+      { title: "AI Workbench Documentation", url: "https://docs.nvidia.com/ai-workbench/" },
+      { title: "DGX Spark Documentation", url: "https://docs.nvidia.com/dgx/dgx-spark" }
+    ]
+  },
+
+  "connect-two-sparks": {
+    launchable_id: "connect-two-sparks",
+    title: "Connect Two Sparks",
+    overview: "Connect two DGX Spark devices and set them up for distributed inference and fine-tuning. This enables running larger models across multiple GPUs.",
+    prerequisites: [
+      "Two DGX Spark devices",
+      "Network connectivity (Ethernet recommended)",
+      "Same software versions on both devices"
+    ],
+    steps: [
+      {
+        title: "Verify network connectivity",
+        description: "Ensure both Sparks can communicate over the network:",
+        code: `# On Spark 1 - get IP address
+hostname -I
+
+# On Spark 2 - ping Spark 1
+ping <spark1_ip>`,
+        note: "Use Ethernet for best performance. WiFi may have higher latency."
+      },
+      {
+        title: "Configure SSH key authentication",
+        description: "Set up passwordless SSH between the two Sparks:",
+        code: `# On Spark 1 - generate SSH key
+ssh-keygen -t ed25519 -f ~/.ssh/id_spark
+
+# Copy to Spark 2
+ssh-copy-id -i ~/.ssh/id_spark.pub user@<spark2_ip>
+
+# Test connection
+ssh user@<spark2_ip> hostname`
+      },
+      {
+        title: "Verify GPU visibility on both devices",
+        description: "Confirm GPUs are accessible on both Sparks:",
+        code: `# On Spark 1
+nvidia-smi
+
+# On Spark 2 (via SSH)
+ssh user@<spark2_ip> nvidia-smi`
+      },
+      {
+        title: "Install distributed training framework",
+        description: "Ensure PyTorch with distributed support is available:",
+        code: `# On both Sparks
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
+
+# Verify NCCL support
+python -c "import torch.distributed as dist; print('Distributed available:', dist.is_available())"`
+      },
+      {
+        title: "Set up hostfile for distributed training",
+        description: "Create a hostfile listing both machines:",
+        code: `cat > hostfile << EOF
+<spark1_ip> slots=1
+<spark2_ip> slots=1
+EOF`
+      },
+      {
+        title: "Test distributed communication",
+        description: "Run a simple NCCL test across both Sparks:",
+        code: `# Create test script
+cat > test_dist.py << 'EOF'
+import torch
+import torch.distributed as dist
+import os
+
+dist.init_process_group(backend='nccl')
+rank = dist.get_rank()
+world_size = dist.get_world_size()
+print(f"Rank {rank}/{world_size} initialized on {torch.cuda.get_device_name(0)}")
+
+# Test all-reduce
+tensor = torch.ones(1).cuda() * rank
+dist.all_reduce(tensor)
+print(f"Rank {rank}: all-reduce result = {tensor.item()}")
+EOF
+
+# Run across both Sparks
+torchrun --nnodes=2 --nproc_per_node=1 \\
+  --rdzv_backend=c10d --rdzv_endpoint=<spark1_ip>:29500 \\
+  test_dist.py`
+      },
+      {
+        title: "Run distributed inference",
+        description: "Use tensor parallelism to run a large model across both GPUs. Example with vLLM:",
+        code: `# On Spark 1 (coordinator)
+docker run --gpus all -it --rm --network host \\
+  nvcr.io/nvidia/vllm:25.12.post1-py3 \\
+  vllm serve "meta-llama/Llama-3.1-70B" --tensor-parallel-size 2`,
+        note: "Tensor parallelism with tp=2 splits the model across both Spark GPUs."
+      }
+    ],
+    nextSteps: [
+      "Run larger models that don't fit on a single Spark",
+      "Set up distributed fine-tuning with DeepSpeed or FSDP",
+      "Configure monitoring across both devices"
+    ],
+    resources: [
+      { title: "PyTorch Distributed Training", url: "https://pytorch.org/tutorials/intermediate/ddp_tutorial.html" },
+      { title: "DGX Spark Documentation", url: "https://docs.nvidia.com/dgx/dgx-spark" }
+    ]
+  },
+
+  "txt2kg": {
+    launchable_id: "txt2kg",
+    title: "Text to Knowledge Graph",
+    overview: "Transform unstructured text into interactive knowledge graphs with LLM inference and graph visualization. This playbook sets up a pipeline that extracts entities and relationships from text using an LLM.",
+    prerequisites: [
+      "DGX Spark with GPU access",
+      "Docker with GPU support",
+      "Python 3.10+"
+    ],
+    steps: [
+      {
+        title: "Clone the txt2kg repository",
+        description: "Download the text-to-knowledge-graph project:",
+        code: `git clone https://github.com/NVIDIA/GenerativeAIExamples.git
+cd GenerativeAIExamples/community/txt2kg`
+      },
+      {
+        title: "Create virtual environment",
+        description: "Set up an isolated Python environment:",
+        code: `python3 -m venv txt2kg-env
+source txt2kg-env/bin/activate`
+      },
+      {
+        title: "Install dependencies",
+        description: "Install the required packages:",
+        code: `pip install -r requirements.txt`
+      },
+      {
+        title: "Start the LLM backend",
+        description: "Run Ollama with a capable model:",
+        code: `# Pull a model good at extraction
+ollama pull llama3.1:8b
+
+# Start Ollama
+ollama serve`
+      },
+      {
+        title: "Configure the application",
+        description: "Set up the connection to your LLM backend:",
+        code: `cat > config.yaml << 'EOF'
+llm:
+  base_url: http://localhost:11434
+  model: llama3.1:8b
+graph:
+  output_format: html
+EOF`
+      },
+      {
+        title: "Run text to knowledge graph extraction",
+        description: "Process a sample text file:",
+        code: `python extract.py --input sample_text.txt --output knowledge_graph.html`,
+        note: "The LLM extracts entities and relationships, then generates an interactive graph."
+      },
+      {
+        title: "Launch the visualization server",
+        description: "Start the web interface for interactive exploration:",
+        code: `python app.py`,
+        note: "Access the visualization at http://localhost:7860"
+      },
+      {
+        title: "Explore the knowledge graph",
+        description: "In the web interface, upload text documents and explore the generated knowledge graphs. You can click on nodes to see relationships and filter by entity types."
+      },
+      {
+        title: "Cleanup",
+        description: "Stop all services when finished:",
+        code: `# Stop the app with Ctrl+C
+pkill ollama
+deactivate`
+      }
+    ],
+    nextSteps: [
+      "Process larger documents and combine multiple knowledge graphs",
+      "Export graphs to Neo4j or other graph databases",
+      "Fine-tune the extraction prompts for domain-specific entities"
+    ],
+    resources: [
+      { title: "NVIDIA Generative AI Examples", url: "https://github.com/NVIDIA/GenerativeAIExamples" },
+      { title: "DGX Spark Documentation", url: "https://docs.nvidia.com/dgx/dgx-spark" }
+    ]
+  },
+
+  "vss": {
+    launchable_id: "vss",
+    title: "Build a Video Search and Summarization Agent",
+    overview: "Run the Video Search and Summarization (VSS) Blueprint on your DGX Spark. This enables intelligent video content analysis with natural language queries.",
+    prerequisites: [
+      "DGX Spark with GPU access",
+      "Docker with GPU support",
+      "At least 32GB GPU memory"
+    ],
+    steps: [
+      {
+        title: "Clone the VSS Blueprint",
+        description: "Download the Video Search and Summarization project:",
+        code: `git clone https://github.com/NVIDIA/GenerativeAIExamples.git
+cd GenerativeAIExamples/community/video-search-and-summarization`
+      },
+      {
+        title: "Set up environment variables",
+        description: "Configure required environment variables:",
+        code: `export NGC_API_KEY=<your_ngc_api_key>
+export HF_TOKEN=<your_huggingface_token>`
+      },
+      {
+        title: "Pull required containers",
+        description: "Download the necessary container images:",
+        code: `docker compose pull`,
+        note: "This downloads several containers including LLM, embedding, and video processing services."
+      },
+      {
+        title: "Start the VSS services",
+        description: "Launch all services with Docker Compose:",
+        code: `docker compose up -d`,
+        note: "Services include: LLM inference, embedding model, vector database, and web interface."
+      },
+      {
+        title: "Access the web interface",
+        description: "Open the VSS web interface in your browser:",
+        code: `# Open in browser:
+# http://localhost:8080`
+      },
+      {
+        title: "Upload and process videos",
+        description: "In the web interface, upload video files. The system will automatically extract audio, transcribe speech, and index visual content."
+      },
+      {
+        title: "Search and summarize",
+        description: "Use natural language queries to search video content. Ask questions like 'Find all mentions of product launch' or 'Summarize the main topics discussed'."
+      },
+      {
+        title: "Cleanup",
+        description: "Stop all services when finished:",
+        code: `docker compose down
+
+# Remove volumes with video data
+docker compose down -v`
+      }
+    ],
+    nextSteps: [
+      "Process longer videos and video collections",
+      "Customize the summarization prompts for your use case",
+      "Integrate with your existing video management system"
+    ],
+    resources: [
+      { title: "NVIDIA Generative AI Examples", url: "https://github.com/NVIDIA/GenerativeAIExamples" },
+      { title: "DGX Spark Documentation", url: "https://docs.nvidia.com/dgx/dgx-spark" }
+    ]
+  },
+
+  "jax": {
+    launchable_id: "jax",
+    title: "Optimized JAX",
+    overview: "Optimize JAX to run on DGX Spark with CUDA acceleration. JAX is a high-performance numerical computing library that combines NumPy-like syntax with automatic differentiation and GPU/TPU support.",
+    prerequisites: [
+      "DGX Spark with GPU access",
+      "Python 3.10+",
+      "CUDA toolkit installed"
+    ],
+    steps: [
+      {
+        title: "Create virtual environment",
+        description: "Set up an isolated Python environment for JAX:",
+        code: `python3 -m venv jax-env
+source jax-env/bin/activate`
+      },
+      {
+        title: "Install JAX with CUDA support",
+        description: "Install JAX with GPU support for CUDA 12:",
+        code: `pip install --upgrade pip
+pip install --upgrade "jax[cuda12]"`,
+        note: "This installs JAX with NVIDIA GPU support via CUDA 12."
+      },
+      {
+        title: "Verify GPU detection",
+        description: "Confirm JAX can see and use the GPU:",
+        code: `python -c "
+import jax
+print('Devices:', jax.devices())
+print('Default backend:', jax.default_backend())
+"`,
+        note: "You should see 'gpu' as the default backend and your GPU listed."
+      },
+      {
+        title: "Test GPU computation",
+        description: "Run a simple GPU-accelerated computation:",
+        code: `python << 'EOF'
+import jax
+import jax.numpy as jnp
+from jax import random
+
+# Create a random matrix on GPU
+key = random.PRNGKey(0)
+x = random.normal(key, (5000, 5000))
+
+# Matrix multiplication on GPU
+result = jnp.dot(x, x.T)
+print(f"Result shape: {result.shape}")
+print(f"Computation device: {result.devices()}")
+EOF`
+      },
+      {
+        title: "Install additional JAX libraries",
+        description: "Install common JAX ecosystem packages:",
+        code: `pip install flax optax orbax-checkpoint`
+      },
+      {
+        title: "Optimize memory allocation",
+        description: "Configure JAX memory settings for large models:",
+        code: `# Add to your script or .bashrc
+export XLA_PYTHON_CLIENT_MEM_FRACTION=0.9
+export XLA_FLAGS="--xla_gpu_enable_triton_gemm=false"`,
+        note: "These settings optimize GPU memory usage for DGX Spark."
+      },
+      {
+        title: "Run a JAX neural network example",
+        description: "Test a simple Flax neural network:",
+        code: `python << 'EOF'
+import jax
+import jax.numpy as jnp
+from flax import linen as nn
+from flax.training import train_state
+import optax
+
+class MLP(nn.Module):
+    @nn.compact
+    def __call__(self, x):
+        x = nn.Dense(256)(x)
+        x = nn.relu(x)
+        x = nn.Dense(10)(x)
+        return x
+
+# Initialize model
+model = MLP()
+params = model.init(jax.random.PRNGKey(0), jnp.ones((1, 784)))
+print(f"Model parameters: {jax.tree_util.tree_map(lambda x: x.shape, params)}")
+EOF`
+      },
+      {
+        title: "Cleanup",
+        description: "Deactivate the environment when finished:",
+        code: `deactivate
+
+# Remove environment if no longer needed
+rm -rf jax-env`
+      }
+    ],
+    nextSteps: [
+      "Explore JAX's JIT compilation for faster execution",
+      "Use vmap for automatic vectorization",
+      "Train large models with pjit for model parallelism"
+    ],
+    resources: [
+      { title: "JAX Documentation", url: "https://jax.readthedocs.io/" },
+      { title: "Flax Documentation", url: "https://flax.readthedocs.io/" },
+      { title: "DGX Spark Documentation", url: "https://docs.nvidia.com/dgx/dgx-spark" }
+    ]
   }
 };
 
