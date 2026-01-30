@@ -32,7 +32,19 @@ services:
       - DOCKER_HOST=unix:///var/run/docker.sock
     restart: unless-stopped
     # Enable NVIDIA runtime for GPU access (nvidia-smi)
-    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     # Add user to docker group for socket access
     group_add:
       - "999"  # docker group ID (may vary by system)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
