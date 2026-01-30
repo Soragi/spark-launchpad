@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,11 @@ import { getInstructions, type LaunchableInstructions } from "@/data/launchableI
 import { openTerminal } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
+interface ApiKeys {
+  ngcApiKey: string;
+  hfToken: string;
+}
+
 const LaunchableDetails = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -31,6 +36,20 @@ const LaunchableDetails = () => {
   
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [isOpeningTerminal, setIsOpeningTerminal] = useState(false);
+  const [apiKeys, setApiKeys] = useState<ApiKeys>({ ngcApiKey: "", hfToken: "" });
+
+  // Load saved API keys from localStorage
+  useEffect(() => {
+    const savedKeys = localStorage.getItem("dgx-spark-api-keys");
+    if (savedKeys) {
+      try {
+        const parsed = JSON.parse(savedKeys);
+        setApiKeys(parsed);
+      } catch (e) {
+        console.error("Failed to parse saved keys");
+      }
+    }
+  }, []);
 
   const launchable = launchables.find(l => l.id === id);
   
@@ -40,13 +59,30 @@ const LaunchableDetails = () => {
     return getInstructions(id);
   }, [id]);
 
+  // Substitute API keys into commands
+  const substituteApiKeys = (command: string): string => {
+    let result = command;
+    if (apiKeys.ngcApiKey) {
+      result = result.replace(/\$NGC_API_KEY/g, apiKeys.ngcApiKey);
+      result = result.replace(/\$\{NGC_API_KEY\}/g, apiKeys.ngcApiKey);
+    }
+    if (apiKeys.hfToken) {
+      result = result.replace(/\$HF_TOKEN/g, apiKeys.hfToken);
+      result = result.replace(/\$\{HF_TOKEN\}/g, apiKeys.hfToken);
+    }
+    return result;
+  };
+
   const copyCommand = async (command: string, index: number) => {
     try {
-      await navigator.clipboard.writeText(command);
+      const substitutedCommand = substituteApiKeys(command);
+      await navigator.clipboard.writeText(substitutedCommand);
       setCopiedIndex(index);
       toast({
         title: "Copied!",
-        description: "Command copied to clipboard",
+        description: apiKeys.ngcApiKey || apiKeys.hfToken 
+          ? "Command copied with your API keys" 
+          : "Command copied to clipboard",
       });
       setTimeout(() => setCopiedIndex(null), 2000);
     } catch (err) {
@@ -62,11 +98,13 @@ const LaunchableDetails = () => {
     if (!instructions?.commands.length) return;
     
     try {
-      const allCommands = instructions.commands.join('\n\n');
+      const allCommands = instructions.commands.map(substituteApiKeys).join('\n\n');
       await navigator.clipboard.writeText(allCommands);
       toast({
         title: "All commands copied!",
-        description: `${instructions.commands.length} commands copied to clipboard`,
+        description: apiKeys.ngcApiKey || apiKeys.hfToken 
+          ? `${instructions.commands.length} commands copied with your API keys` 
+          : `${instructions.commands.length} commands copied to clipboard`,
       });
     } catch (err) {
       toast({
@@ -79,6 +117,8 @@ const LaunchableDetails = () => {
 
   const copyAsScript = async () => {
     if (!instructions?.commands.length || !launchable) return;
+    
+    const substitutedCommands = instructions.commands.map(substituteApiKeys);
     
     const scriptContent = `#!/usr/bin/env bash
 
@@ -94,7 +134,7 @@ set -euo pipefail
 echo "Starting deployment: ${launchable.title}"
 echo "============================================="
 
-${instructions.commands.map((cmd, i) => `# Step ${i + 1}\necho "Running step ${i + 1}..."\n${cmd}`).join('\n\n')}
+${substitutedCommands.map((cmd, i) => `# Step ${i + 1}\necho "Running step ${i + 1}..."\n${cmd}`).join('\n\n')}
 
 echo ""
 echo "============================================="
@@ -105,7 +145,9 @@ echo "Deployment complete!"
       await navigator.clipboard.writeText(scriptContent);
       toast({
         title: "Script copied!",
-        description: "Shell script copied to clipboard. Save as .sh file and run with bash.",
+        description: apiKeys.ngcApiKey || apiKeys.hfToken 
+          ? "Shell script copied with your API keys. Save as .sh file and run with bash." 
+          : "Shell script copied to clipboard. Save as .sh file and run with bash.",
       });
     } catch (err) {
       toast({
