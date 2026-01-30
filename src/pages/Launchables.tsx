@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import LaunchableCard, { Launchable } from "@/components/launchables/LaunchableCard";
 import { launchables } from "@/data/launchables";
@@ -7,70 +6,20 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Search, Rocket } from "lucide-react";
 import { useSavedLaunchables } from "@/hooks/use-saved-launchables";
-import { useAutoDeploy } from "@/hooks/use-auto-deploy";
 import { useToast } from "@/hooks/use-toast";
 
 const Launchables = () => {
-  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState("all");
   const { addLaunchable, isLaunchableSaved } = useSavedLaunchables();
   const { toast } = useToast();
-  const [deployingId, setDeployingId] = useState<string | null>(null);
-
-  const { deploy, isDeploying } = useAutoDeploy({
-    onComplete: (job) => {
-      toast({
-        title: "Deployment Complete",
-        description: `${job.launchable_id} has been deployed successfully!`,
-      });
-      setDeployingId(null);
-      navigate('/deployments');
-    },
-    onError: (error) => {
-      toast({
-        title: "Deployment Failed",
-        description: error,
-        variant: "destructive",
-      });
-      setDeployingId(null);
-    },
-  });
 
   const handleAddToDeployments = (launchable: Launchable) => {
     addLaunchable(launchable);
     toast({
-      title: "Added to Deployments",
-      description: `${launchable.title} has been added to your deployments.`,
+      title: "Saved",
+      description: `${launchable.title} has been saved to your list.`,
     });
-  };
-
-  const handleDeploy = async (launchable: Launchable) => {
-    // Check for API keys if required
-    if (launchable.requiresApiKey) {
-      const hfKey = localStorage.getItem('hf_api_key');
-      if (!hfKey) {
-        toast({
-          title: "API Key Required",
-          description: "Please configure your HuggingFace API key in Settings first.",
-          variant: "destructive",
-        });
-        navigate('/settings');
-        return;
-      }
-    }
-
-    // Add to saved launchables first
-    addLaunchable(launchable);
-    
-    // Start deployment
-    setDeployingId(launchable.id);
-    toast({
-      title: "Starting Deployment",
-      description: `Fetching instructions and deploying ${launchable.title}...`,
-    });
-    
-    await deploy(launchable.id);
   };
 
   const filteredLaunchables = launchables.filter((l) => {
@@ -132,9 +81,7 @@ const Launchables = () => {
                       key={launchable.id}
                       launchable={launchable}
                       onAddToDeployments={handleAddToDeployments}
-                      onDeploy={handleDeploy}
                       isSaved={isLaunchableSaved(launchable.id)}
-                      isDeploying={isDeploying && deployingId === launchable.id}
                     />
                   ))}
                 </div>
@@ -150,9 +97,7 @@ const Launchables = () => {
                         key={launchable.id}
                         launchable={launchable}
                         onAddToDeployments={handleAddToDeployments}
-                        onDeploy={handleDeploy}
                         isSaved={isLaunchableSaved(launchable.id)}
-                        isDeploying={isDeploying && deployingId === launchable.id}
                       />
                     ))}
                   </div>
@@ -167,9 +112,7 @@ const Launchables = () => {
                         key={launchable.id}
                         launchable={launchable}
                         onAddToDeployments={handleAddToDeployments}
-                        onDeploy={handleDeploy}
                         isSaved={isLaunchableSaved(launchable.id)}
-                        isDeploying={isDeploying && deployingId === launchable.id}
                       />
                     ))}
                   </div>
@@ -184,9 +127,7 @@ const Launchables = () => {
                         key={launchable.id}
                         launchable={launchable}
                         onAddToDeployments={handleAddToDeployments}
-                        onDeploy={handleDeploy}
                         isSaved={isLaunchableSaved(launchable.id)}
-                        isDeploying={isDeploying && deployingId === launchable.id}
                       />
                     ))}
                   </div>
@@ -202,9 +143,7 @@ const Launchables = () => {
                   key={launchable.id}
                   launchable={launchable}
                   onAddToDeployments={handleAddToDeployments}
-                  onDeploy={handleDeploy}
                   isSaved={isLaunchableSaved(launchable.id)}
-                  isDeploying={isDeploying && deployingId === launchable.id}
                 />
               ))}
             </div>
@@ -217,9 +156,7 @@ const Launchables = () => {
                   key={launchable.id}
                   launchable={launchable}
                   onAddToDeployments={handleAddToDeployments}
-                  onDeploy={handleDeploy}
                   isSaved={isLaunchableSaved(launchable.id)}
-                  isDeploying={isDeploying && deployingId === launchable.id}
                 />
               ))}
             </div>
